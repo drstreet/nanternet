@@ -40,6 +40,24 @@ Because check-host.net rate limits requests, the external probe runs on its own 
 (15 minutes by default) while the local request keeps its short interval. The most recent external
 result is carried forward between probes.
 
+### Websites, through several DNS resolvers
+
+Optional per target. The address is resolved by each resolver in turn, and then the site is fetched
+**through every answer**, which is what separates a poisoned name from a blocked address:
+
+| Condition | Verdict |
+| --- | --- |
+| a resolver returns a non-routable address while others return a real one | **DNS is answering with a fake address** — the shape of DNS-level filtering |
+| your network cannot reach the site but some resolver's address can | **Another resolver still reaches it** — switching resolver restores access |
+| no resolver answers at all | **No resolver answered** — outbound port 53 is likely blocked, the site is not implicated |
+
+Shecan, 403.online, Begzar, Electro, Cloudflare and Google are built in; add any resolver by IP in
+Settings. DNS is spoken directly over UDP/53 rather than through a resolver library, because the
+resolvers that matter here offer no DNS-over-HTTPS.
+
+Resolvers that merely disagree on the address are not reported. A CDN hands a different edge to every
+resolver, and treating that as a fault would be a false-alarm machine.
+
 ### Servers over SSH
 
 One connection per check runs a single batched command and parses the result locally:
@@ -83,6 +101,11 @@ combination is configured. Two behaviours keep them useful:
 - an alert fires only when the verdict actually changes, not on every cycle
 - a failure must repeat a configurable number of times before it is announced, so one dropped packet
   does not wake you up. Recoveries are always announced immediately.
+
+Telegram and Discord are both blocked in Iran, so alerts can be routed through a proxy: point the
+setting at the local inbound your v2ray, Xray or Hiddify client already listens on, usually
+`socks5h://127.0.0.1:10808`. Site checks deliberately ignore it, otherwise they would be measuring
+the tunnel instead of your network.
 
 Closing the window leaves the app running in the tray so checks continue.
 
@@ -129,6 +152,7 @@ src/                    React interface
 src-tauri/src/
   network_checker.rs    local probe and the verdict rules
   checkhost.rs          check-host.net client, node selection, result parsing
+  dns_probe.rs          UDP/53 resolution per resolver, then a pinned fetch
   ssh_manager.rs        SSH transport, host key pinning, resource parsing
   docker_monitor.rs     container state and healthcheck parsing
   cert_watch.rs         TLS handshake inspection, RDAP and whois

@@ -13,6 +13,7 @@ export interface WebsiteSpec {
   url: string;
   externalProbe: boolean;
   externalIntervalSecs: number;
+  dnsProbe: boolean;
   expectedStatus: number | null;
   expectedBody: string | null;
   iranNodes: number;
@@ -92,6 +93,21 @@ export interface WebsiteReport {
   externalError: string | null;
 }
 
+export interface DnsAttempt {
+  label: string;
+  resolver: string;
+  builtin: boolean;
+  answers: string[];
+  reserved: boolean;
+  error: string | null;
+  probe: LocalProbe | null;
+}
+
+export interface DnsReport {
+  checkedAt: number;
+  attempts: DnsAttempt[];
+}
+
 export interface Usage {
   total: number;
   used: number;
@@ -148,6 +164,7 @@ export interface TargetStatus {
   website?: WebsiteReport;
   server?: ServerReport;
   domain?: DomainReport;
+  dns?: DnsReport;
 }
 
 export interface Settings {
@@ -155,6 +172,8 @@ export interface Settings {
   desktopNotifications: boolean;
   discordWebhook: string | null;
   telegramChatId: string | null;
+  proxyUrl: string | null;
+  dnsResolvers: string[];
   confirmations: number;
   startAtLogin: boolean;
 }

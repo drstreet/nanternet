@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../i18n";
 import type { Target, TargetKind, TargetSpec, TargetView } from "../types";
-import { Button, Toggle } from "./primitives";
+import { Button, Toggle, lines } from "./primitives";
 
 const INTERVALS = [30, 60, 120, 300, 600, 1800, 3600];
 const EXTERNAL_INTERVALS = [300, 900, 1800, 3600, 10800];
@@ -15,6 +15,7 @@ interface Draft {
   url: string;
   externalProbe: boolean;
   externalIntervalSecs: number;
+  dnsProbe: boolean;
   expectedStatus: string;
   expectedBody: string;
   iranNodes: number;
@@ -44,6 +45,7 @@ const blank: Draft = {
   url: "",
   externalProbe: true,
   externalIntervalSecs: 900,
+  dnsProbe: false,
   expectedStatus: "",
   expectedBody: "",
   iranNodes: 3,
@@ -82,6 +84,7 @@ function seed(target: TargetView | null): Draft {
       url: spec.url,
       externalProbe: spec.externalProbe,
       externalIntervalSecs: spec.externalIntervalSecs,
+      dnsProbe: spec.dnsProbe,
       expectedStatus: spec.expectedStatus ? String(spec.expectedStatus) : "",
       expectedBody: spec.expectedBody ?? "",
       iranNodes: spec.iranNodes,
@@ -117,13 +120,6 @@ function seed(target: TargetView | null): Draft {
   };
 }
 
-function lines(value: string): string[] {
-  return value
-    .split("\n")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
 function number(value: string, fallback: number): number {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -137,6 +133,7 @@ function specOf(draft: Draft): TargetSpec {
         url: draft.url,
         externalProbe: draft.externalProbe,
         externalIntervalSecs: draft.externalIntervalSecs,
+        dnsProbe: draft.dnsProbe,
         expectedStatus: draft.expectedStatus ? number(draft.expectedStatus, 200) : null,
         expectedBody: draft.expectedBody.trim() || null,
         iranNodes: draft.iranNodes,
@@ -350,6 +347,13 @@ export function AddServerModal({ target, onClose, onSubmit }: Props) {
                   />
                 </div>
               </div>
+
+              <Toggle
+                checked={draft.dnsProbe}
+                onChange={(value) => patch("dnsProbe", value)}
+                label={t("field.dnsProbe")}
+                hint={t("field.dnsProbe.hint")}
+              />
 
               <Toggle
                 checked={draft.externalProbe}

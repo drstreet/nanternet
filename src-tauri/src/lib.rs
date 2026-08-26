@@ -2,6 +2,7 @@ mod cert_watch;
 mod checkhost;
 mod commands;
 mod config;
+mod dns_probe;
 mod docker_monitor;
 mod error;
 mod network_checker;

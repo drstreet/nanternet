@@ -81,9 +81,40 @@ rather than HTML or Markdown is deliberate: finding details contain arbitrary st
 messages and container names, and a stray `<` or `_` in one of those would make Telegram reject the
 whole message. Losing an alert to a formatting error is not a trade worth making.
 
-Note that Telegram's API is not always reachable from Iranian networks without a proxy. The app
-respects `HTTPS_PROXY` for outbound notification and check-host traffic, while the local website
-probe deliberately ignores it so that it keeps measuring your real network.
+Telegram's API is not reachable from most Iranian networks without a proxy, which is what the setting
+below is for.
+
+### Proxy for alerts
+
+Telegram and Discord are both blocked in Iran, so a monitor that can watch a site but never report on
+it is not much use. **Proxy for alerts** in Settings routes both channels through a proxy.
+
+Point it at the local inbound your existing client already listens on:
+
+| Client | Inbound |
+| --- | --- |
+| v2rayN | `socks5h://127.0.0.1:10808` by default, HTTP on `10809` |
+| anything else | whatever its own settings screen reports as the local SOCKS or HTTP inbound |
+
+Do not guess the port. Every client shows it, usually labelled local, inbound or listening port, and
+Hiddify in particular has changed its default across versions.
+
+Accepted schemes are `http`, `https`, `socks5` and `socks5h`. Anything else is refused when you save,
+rather than failing silently later. Prefer `socks5h` over `socks5`: the `h` sends the hostname to the
+proxy for resolution, so `api.telegram.org` is resolved on the far side of the tunnel instead of by
+the resolver you are working around.
+
+A raw `vmess://` or `vless://` link cannot be pasted here. Speaking those protocols would mean
+shipping a v2ray core inside the app. Your client already does that job and exposes a local port; this
+connects to that port.
+
+If the proxy is misconfigured, the alert is dropped and the reason is written to standard error. It is
+deliberately **not** retried directly: the proxy exists because the direct path does not work, and
+sending your bot token down the very route you are avoiding is not a helpful fallback.
+
+`HTTPS_PROXY` in the environment is still honoured when this setting is empty, so an existing setup
+keeps working. The local website probe ignores both, so it keeps measuring your real network rather
+than your tunnel. The DNS check ignores both as well, for the same reason.
 
 ## What an alert looks like
 
@@ -111,6 +142,8 @@ If nothing arrives:
 - desktop only: check the OS notification permission for IranNANternet
 - Discord only: the webhook URL is wrong or the webhook was deleted
 - Telegram only: the token or chat ID is wrong, or the bot was never added to the channel
+- neither Discord nor Telegram, while desktop works: the network cannot reach either API, which is the
+  case a proxy fixes. Confirm your client is running and its inbound port matches what you entered.
 - nothing at all: no channel is configured, and desktop notifications are switched off
 
 Delivery failures are not silent, but they are not shown in the interface either; they are written to

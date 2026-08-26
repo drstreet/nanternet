@@ -248,6 +248,7 @@ mod tests {
             url: "https://example.ir".into(),
             external_probe: true,
             external_interval_secs: 900,
+            dns_probe: false,
             expected_status: None,
             expected_body: None,
             iran_nodes: 2,

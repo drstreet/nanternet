@@ -8,7 +8,7 @@ use crate::error::Result;
 use crate::notification_engine::{self, Alert};
 use crate::state::AppState;
 use crate::status::{Finding, TargetStatus, WebsiteReport};
-use crate::{cert_watch, network_checker, secrets, ssh_manager};
+use crate::{cert_watch, dns_probe, network_checker, secrets, ssh_manager};
 
 pub const STATUS_EVENT: &str = "target://status";
 
@@ -94,12 +94,11 @@ async fn examine(app: &AppHandle, target: &Target, slow: bool) -> TargetStatus {
         TargetSpec::Website(spec) => {
             let local = network_checker::probe_locally(&state.local_http, spec).await;
 
-            let carried = state
-                .status_of(&target.id)
-                .await
-                .and_then(|previous| previous.website);
+            let previous = state.status_of(&target.id).await;
+            let carried = previous.as_ref().and_then(|status| status.website.clone());
             let mut external = carried.as_ref().and_then(|report| report.external.clone());
             let mut external_error = carried.and_then(|report| report.external_error);
+            let mut dns = previous.and_then(|status| status.dns);
 
             if spec.external_probe && slow {
                 match network_checker::probe_externally(&state.checkhost, spec).await {
@@ -111,6 +110,11 @@ async fn examine(app: &AppHandle, target: &Target, slow: bool) -> TargetStatus {
                 }
             }
 
+            if spec.dns_probe && slow {
+                let resolvers = state.settings().await.dns_resolvers;
+                dns = Some(dns_probe::probe(spec, &resolvers).await);
+            }
+
             let report = WebsiteReport {
                 local,
                 external: if spec.external_probe { external } else { None },
@@ -120,7 +124,13 @@ async fn examine(app: &AppHandle, target: &Target, slow: bool) -> TargetStatus {
                     None
                 },
             };
-            let findings = network_checker::classify(spec, &report);
+            let mut findings = network_checker::classify(spec, &report);
+            if spec.dns_probe {
+                if let Some(dns) = &dns {
+                    findings.extend(dns_probe::classify(dns, report.local.reachable));
+                }
+                status.dns = dns;
+            }
             status.website = Some(report);
             status.seal(findings, started)
         }

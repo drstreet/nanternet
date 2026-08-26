@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { useI18n } from "../i18n";
 import type {
+  DnsReport,
   DomainReport,
   Finding,
   NodeResult,
@@ -103,6 +104,7 @@ export function ServerList({
                 <Findings findings={status?.findings ?? []} />
 
                 {status?.website ? <WebsiteDetail report={status.website} /> : null}
+                {status?.dns ? <DnsDetail report={status.dns} /> : null}
                 {status?.server ? <ServerDetail report={status.server} /> : null}
                 {status?.domain ? <DomainDetail report={status.domain} /> : null}
 
@@ -246,6 +248,71 @@ function NodeGroup({ title, nodes }: { title: string; nodes: NodeResult[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function DnsDetail({ report }: { report: DnsReport }) {
+  const { t, relative } = useI18n();
+  if (report.attempts.length === 0) return null;
+
+  return (
+    <section className="mt-4">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="label mb-0">{t("status.dns")}</h4>
+        <span className="text-xs text-ink-faint">
+          {t("status.externalAge", { ago: relative(report.checkedAt) })}
+        </span>
+      </div>
+      <ul className="space-y-1">
+        {report.attempts.map((attempt) => {
+          const failed = attempt.error !== null;
+          const serves = attempt.probe?.reachable === true;
+          return (
+            <li
+              key={attempt.resolver}
+              className="flex items-start justify-between gap-3 text-xs"
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-ink-muted">
+                  {attempt.label}
+                  {attempt.builtin ? null : (
+                    <span className="text-ink-faint"> · {t("status.dns.custom")}</span>
+                  )}
+                </span>
+                <span className="truncate font-mono text-ink-faint">{attempt.resolver}</span>
+              </span>
+              <span
+                className={`shrink-0 text-end font-mono ${
+                  failed
+                    ? "text-ink-faint"
+                    : attempt.reserved
+                      ? "text-bad"
+                      : serves
+                        ? "text-good"
+                        : "text-caution"
+                }`}
+              >
+                {failed ? (
+                  attempt.error
+                ) : (
+                  <>
+                    {attempt.answers.join(", ")}
+                    <span className="block">
+                      {attempt.probe
+                        ? serves
+                          ? `HTTP ${attempt.probe.status ?? "?"} · ${attempt.probe.latencyMs ?? "?"} ms`
+                          : (attempt.probe.error ?? t("status.unreachable"))
+                        : t("status.dns.noAddress")}
+                    </span>
+                  </>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="hint mt-2">{t("status.dns.hint")}</p>
+    </section>
   );
 }
 

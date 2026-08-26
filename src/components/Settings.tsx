@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { sendTestNotification } from "../api";
 import { useI18n } from "../i18n";
 import type { Language, Settings as SettingsShape, SettingsView } from "../types";
-import { Button, Toggle } from "./primitives";
+import { Button, Toggle, lines } from "./primitives";
 
 interface Props {
   settings: SettingsView;
@@ -14,9 +14,14 @@ export function Settings({ settings, onSave }: Props) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<SettingsShape>(settings);
   const [telegramToken, setTelegramToken] = useState("");
+  // Kept as raw text so typing a newline is not swallowed mid-edit.
+  const [resolvers, setResolvers] = useState(settings.dnsResolvers.join("\n"));
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => {
+    setDraft(settings);
+    setResolvers(settings.dnsResolvers.join("\n"));
+  }, [settings]);
 
   const patch = <K extends keyof SettingsShape>(key: K, value: SettingsShape[K]) => {
     setSaved(false);
@@ -24,7 +29,8 @@ export function Settings({ settings, onSave }: Props) {
   };
 
   const submit = async () => {
-    if (!(await onSave(draft, telegramToken.length > 0 ? telegramToken : undefined))) return;
+    const next = { ...draft, dnsResolvers: lines(resolvers) };
+    if (!(await onSave(next, telegramToken.length > 0 ? telegramToken : undefined))) return;
     setTelegramToken("");
     setSaved(true);
   };
@@ -118,6 +124,20 @@ export function Settings({ settings, onSave }: Props) {
           </div>
         </div>
 
+        <div>
+          <label className="label" htmlFor="settings-proxy">
+            {t("settings.proxy")}
+          </label>
+          <input
+            id="settings-proxy"
+            className="field font-mono"
+            placeholder="socks5h://127.0.0.1:10808"
+            value={draft.proxyUrl ?? ""}
+            onChange={(event) => patch("proxyUrl", event.target.value || null)}
+          />
+          <p className="hint">{t("settings.proxy.hint")}</p>
+        </div>
+
         <Button onClick={() => void sendTestNotification()}>{t("action.test")}</Button>
       </section>
 
@@ -141,6 +161,24 @@ export function Settings({ settings, onSave }: Props) {
             ))}
           </select>
           <p className="hint">{t("settings.confirmations.hint")}</p>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="settings-resolvers">
+            {t("settings.dnsResolvers")}
+          </label>
+          <textarea
+            id="settings-resolvers"
+            rows={3}
+            className="field font-mono"
+            placeholder="10.202.10.102&#10;9.9.9.9"
+            value={resolvers}
+            onChange={(event) => {
+              setSaved(false);
+              setResolvers(event.target.value);
+            }}
+          />
+          <p className="hint">{t("settings.dnsResolvers.hint")}</p>
         </div>
 
         <Toggle

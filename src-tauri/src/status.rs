@@ -63,6 +63,8 @@ pub struct TargetStatus {
     pub server: Option<ServerReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<DomainReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dns: Option<DnsReport>,
 }
 
 impl TargetStatus {
@@ -76,6 +78,7 @@ impl TargetStatus {
             website: None,
             server: None,
             domain: None,
+            dns: None,
         }
     }
 
@@ -144,6 +147,27 @@ pub struct WebsiteReport {
     pub local: LocalProbe,
     pub external: Option<ExternalProbe>,
     pub external_error: Option<String>,
+}
+
+/// One resolver's answer, plus the result of fetching the site through it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DnsAttempt {
+    pub label: String,
+    pub resolver: String,
+    pub builtin: bool,
+    pub answers: Vec<String>,
+    /// Every returned address is non-routable, the shape of a filtering reply.
+    pub reserved: bool,
+    pub error: Option<String>,
+    pub probe: Option<LocalProbe>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DnsReport {
+    pub checked_at: i64,
+    pub attempts: Vec<DnsAttempt>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

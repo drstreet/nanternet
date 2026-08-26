@@ -138,6 +138,8 @@ pub async fn save_settings(
     telegram_token: Option<String>,
 ) -> Result<Settings> {
     settings.normalize();
+    check_proxy(settings.proxy_url.as_deref())?;
+    check_resolvers(&settings.dns_resolvers)?;
 
     match telegram_token.as_deref().map(str::trim) {
         Some("") => secrets::forget(secrets::TELEGRAM_TOKEN).await?,
@@ -180,6 +182,39 @@ pub async fn send_test_notification(app: AppHandle) -> Result<()> {
         )],
     };
     notification_engine::dispatch(&app, &settings, &alert).await;
+    Ok(())
+}
+
+/// A proxy URL becomes a network destination for the bot token, so it is checked
+/// here rather than trusted. Local v2ray/xray clients expose a SOCKS5 inbound,
+/// which is why socks5h is accepted alongside plain HTTP proxies.
+fn check_proxy(url: Option<&str>) -> Result<()> {
+    let Some(url) = url else {
+        return Ok(());
+    };
+    let parsed = reqwest::Url::parse(url)
+        .map_err(|_| Error::msg("that proxy address cannot be parsed as a URL"))?;
+    if !matches!(parsed.scheme(), "http" | "https" | "socks5" | "socks5h") {
+        return Err(Error::msg(
+            "a proxy must start with http://, https://, socks5:// or socks5h://",
+        ));
+    }
+    match parsed.host_str() {
+        Some(_) => Ok(()),
+        None => Err(Error::msg("that proxy address has no host")),
+    }
+}
+
+/// Resolvers are addressed by IP on purpose: a hostname would have to be
+/// resolved by the very DNS this feature exists to distrust.
+fn check_resolvers(resolvers: &[String]) -> Result<()> {
+    for entry in resolvers {
+        if entry.parse::<std::net::IpAddr>().is_err() {
+            return Err(Error::msg(format!(
+                "{entry:?} is not an IP address; resolvers must be given as IPs"
+            )));
+        }
+    }
     Ok(())
 }
 
