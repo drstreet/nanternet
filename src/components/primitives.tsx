@@ -164,3 +164,11 @@ export function interval(seconds: number): string {
   if (seconds % 60 === 0) return `${seconds / 60}m`;
   return `${seconds}s`;
 }
+
+/** Splits a multi-line textarea into trimmed, non-empty entries. */
+export function lines(value: string): string[] {
+  return value
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}

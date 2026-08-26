@@ -58,6 +58,7 @@ Both keys are optional; a missing or absent file yields no targets and default s
   "url": "https://example.ir",
   "externalProbe": true,
   "externalIntervalSecs": 900,
+  "dnsProbe": false,
   "expectedStatus": null,
   "expectedBody": null,
   "iranNodes": 3,
@@ -69,7 +70,8 @@ Both keys are optional; a missing or absent file yields no targets and default s
 | --- | --- | --- | --- |
 | `url` | string | required | `https://` is prepended when no scheme is present. |
 | `externalProbe` | boolean | `true` | Off turns this into a single-vantage-point monitor and the Iran-access verdict becomes unreachable. |
-| `externalIntervalSecs` | number | `900` | Floored at 300 and never below `intervalSecs`. |
+| `externalIntervalSecs` | number | `900` | Floored at 300 and never below `intervalSecs`. Governs the DNS check too. |
+| `dnsProbe` | boolean | `false` | Resolve through every configured DNS resolver and fetch the site through each answer. Costs one request per resolver, which is why it is off by default. |
 | `expectedStatus` | number or null | `null` | `null` accepts anything below 400. |
 | `expectedBody` | string or null | `null` | Case-insensitive substring search of the response body. |
 | `iranNodes` | number | `3` | Iranian vantage points, capped at 8. `0` disables them. |
@@ -148,6 +150,8 @@ in the keychain.
   "desktopNotifications": true,
   "discordWebhook": null,
   "telegramChatId": null,
+  "proxyUrl": null,
+  "dnsResolvers": [],
   "confirmations": 2,
   "startAtLogin": false
 }
@@ -159,6 +163,8 @@ in the keychain.
 | `desktopNotifications` | boolean | `true` | The OS notification permission still has the final say. |
 | `discordWebhook` | string or null | `null` | Blank strings are normalised to `null`. |
 | `telegramChatId` | string or null | `null` | Telegram is active only when this is set and a token is stored. |
+| `proxyUrl` | string or null | `null` | Proxy for Discord and Telegram delivery only. Scheme must be `http`, `https`, `socks5` or `socks5h`; anything else is rejected on save. Site checks ignore it. |
+| `dnsResolvers` | string array | `[]` | Extra resolver IP addresses, added to the built-in list. IPs only, hostnames are rejected on save. Capped at 12 including built-ins. |
 | `confirmations` | number | `2` | Consecutive failing checks before alerting. Clamped to 1 through 10. |
 | `startAtLogin` | boolean | `false` | Toggling this registers or removes a real login item. |
 
@@ -199,6 +205,9 @@ Deliberately fixed, because exposing them would be exposing a way to break the a
 | TLS connect timeout, 20 s | domain |
 | TLS handshake timeout, 15 s | domain |
 | local HTTP request timeout, 20 s | website |
+| DNS query timeout, 4 s | website, per resolver |
+| DNS pinned fetch timeout, 15 s | website, per resolver |
+| resolver count ceiling, 12 | website, built-ins plus your own |
 | critical usage escalation, 97 % | server memory and disk |
 | scheduler tick, 1 s | all |
 

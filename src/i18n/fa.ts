@@ -51,6 +51,9 @@ export const fa: Dictionary = {
   "field.expectedStatus": "کد وضعیت مورد انتظار",
   "field.expectedStatus.hint": "خالی بگذارید تا هر کد کمتر از ۴۰۰ پذیرفته شود.",
   "field.expectedBody": "متنی که باید در صفحه باشد",
+  "field.dnsProbe": "بررسی از طریق چند دی‌ان‌اس مختلف",
+  "field.dnsProbe.hint":
+    "آدرس را با هر دی‌ان‌اس جدا می‌پرسد و سایت را با همان جواب باز می‌کند، پس معلوم می‌شود نام دستکاری شده یا آی‌پی واقعی بسته است.",
   "field.externalProbe": "بررسی از خارج با check-host.net",
   "field.externalInterval": "بازه بررسی خارجی",
   "field.iranNodes": "تعداد نودهای داخل ایران",
@@ -93,6 +96,11 @@ export const fa: Dictionary = {
   "status.unreachable": "بی‌پاسخ",
   "status.pendingNode": "در حال اجرا",
   "status.noExternal": "هنوز بررسی خارجی انجام نشده است.",
+  "status.dns": "از مسیر هر دی‌ان‌اس",
+  "status.dns.custom": "دلخواه",
+  "status.dns.noAddress": "آدرسی برنگشت",
+  "status.dns.hint":
+    "سبز یعنی سایت از مسیر آن دی‌ان‌اس باز می‌شود. قرمز یعنی آن دی‌ان‌اس آدرسی داده که نمی‌تواند سایت واقعی باشد.",
 
   "server.load": "بار",
   "server.memory": "حافظه",
@@ -116,6 +124,12 @@ export const fa: Dictionary = {
   "settings.telegramChat": "شناسه چت یا کانال تلگرام",
   "settings.telegramToken": "توکن ربات تلگرام",
   "settings.telegramToken.stored": "توکن ربات در کی‌چین سیستم ذخیره شده است.",
+  "settings.proxy": "پروکسی برای ارسال هشدار",
+  "settings.proxy.hint":
+    "تلگرام و دیسکورد در ایران فیلترند، پس هشدارها راه خروج لازم دارند. این را روی همان پورت محلی کلاینت v2ray یا Xray یا هیدیفای خودت بگذار، معمولاً socks5h://127.0.0.1:10808. پروتکل‌های http و https و socks5 و socks5h پذیرفته می‌شوند. بررسی سایت‌ها عمداً از این پروکسی رد نمی‌شود، وگرنه تونل را اندازه می‌گرفت نه شبکهٔ خودت را.",
+  "settings.dnsResolvers": "دی‌ان‌اس‌های اضافه",
+  "settings.dnsResolvers.hint":
+    "هر خط یک آی‌پی، که به فهرست آمادهٔ شکن و ۴۰۳ و بگذر و الکترو و کلودفلر و گوگل اضافه می‌شود. فقط آی‌پی: نام دامنه را باید همان دی‌ان‌اسی حل کند که داریم آزمایشش می‌کنیم.",
   "settings.confirmations": "چند بررسی ناموفق تا هشدار",
   "settings.confirmations.hint":
     "جلوی تبدیل یک پکت گم‌شده به هشدار اشتباه را می‌گیرد. بازگشت به حالت سالم همیشه فوری اعلام می‌شود.",
@@ -145,6 +159,9 @@ export const fa: Dictionary = {
   "finding.website.unexpectedStatus": "کد وضعیت غیرمنتظره",
   "finding.website.contentMismatch": "محتوای صفحه تغییر کرده",
   "finding.website.externalProbeFailed": "بررسی خارجی انجام نشد",
+  "finding.website.dnsSinkholed": "دی‌ان‌اس جواب جعلی می‌دهد",
+  "finding.website.dnsBypass": "با تغییر دی‌ان‌اس باز می‌شود",
+  "finding.website.dnsUnavailable": "هیچ دی‌ان‌اسی جواب نداد",
   "finding.website.healthy": "سایت سالم است",
   "finding.server.unreachable": "سرور پاسخ نمی‌دهد",
   "finding.server.authenticationFailed": "ورود SSH رد شد",

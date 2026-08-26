@@ -69,6 +69,10 @@ pub struct WebsiteSpec {
     pub external_probe: bool,
     #[serde(default = "default_external_interval")]
     pub external_interval_secs: u64,
+    /// Resolve through several DNS servers and fetch the site through each
+    /// answer. Off by default: it costs one request per resolver.
+    #[serde(default)]
+    pub dns_probe: bool,
     #[serde(default)]
     pub expected_status: Option<u16>,
     #[serde(default)]
@@ -200,7 +204,9 @@ impl Target {
 
     pub fn slow_probe_interval(&self) -> Option<u64> {
         match &self.spec {
-            TargetSpec::Website(spec) if spec.external_probe => Some(spec.external_interval_secs),
+            TargetSpec::Website(spec) if spec.external_probe || spec.dns_probe => {
+                Some(spec.external_interval_secs)
+            }
             TargetSpec::Domain(spec) if spec.check_registration => Some(REGISTRATION_INTERVAL),
             _ => None,
         }
@@ -218,6 +224,15 @@ pub struct Settings {
     pub discord_webhook: Option<String>,
     #[serde(default)]
     pub telegram_chat_id: Option<String>,
+    /// Proxy for outbound alerts only. Telegram and Discord are blocked in
+    /// Iran, so without this the app can watch a site but never report on it.
+    /// Site probes deliberately ignore it: routing them through a tunnel would
+    /// answer the wrong question.
+    #[serde(default)]
+    pub proxy_url: Option<String>,
+    /// Extra DNS resolver addresses on top of the built-in list.
+    #[serde(default)]
+    pub dns_resolvers: Vec<String>,
     #[serde(default = "default_confirmations")]
     pub confirmations: u32,
     #[serde(default)]
@@ -231,6 +246,8 @@ impl Default for Settings {
             desktop_notifications: true,
             discord_webhook: None,
             telegram_chat_id: None,
+            proxy_url: None,
+            dns_resolvers: Vec::new(),
             confirmations: default_confirmations(),
             start_at_login: false,
         }
@@ -245,6 +262,14 @@ impl Settings {
         self.confirmations = self.confirmations.clamp(1, 10);
         blank_to_none(&mut self.discord_webhook);
         blank_to_none(&mut self.telegram_chat_id);
+        blank_to_none(&mut self.proxy_url);
+        self.dns_resolvers = self
+            .dns_resolvers
+            .iter()
+            .map(|entry| entry.trim().to_owned())
+            .filter(|entry| !entry.is_empty())
+            .collect();
+        self.dns_resolvers.truncate(crate::dns_probe::MAX_RESOLVERS);
     }
 }
 

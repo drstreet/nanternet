@@ -9,7 +9,7 @@ use crate::config::{Settings, Store, Target};
 use crate::error::Result;
 use crate::status::{Level, TargetStatus};
 
-const USER_AGENT: &str = concat!("IranNANternet/", env!("CARGO_PKG_VERSION"));
+pub(crate) const USER_AGENT: &str = concat!("IranNANternet/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Default, Clone)]
 pub struct Tracked {

@@ -102,7 +102,8 @@ Check whether your host or CDN changed anything about inbound routing, and wheth
 ended up on a list.
 
 `website.blockedLocally` means everyone else can reach it and you cannot. The service is fine. Look
-at your own DNS resolver and your ISP, not at your server.
+at your own DNS resolver and your ISP, not at your server. Switching on the DNS check below turns
+that instruction into an answer.
 
 `website.blockedInsideIran` is the reverse of the headline case: foreign nodes succeed while every
 Iranian node fails. Your site is up but Iranian visitors cannot get to it.
@@ -112,6 +113,89 @@ Iranian node fails. Your site is up but Iranian visitors cannot get to it.
 `website.ispPartial` is the warning you asked for when you said some connections cannot reach the
 server. The detail line names which vantage points failed and what error they got, so you can tell
 whether it is one operator or a coincidence.
+
+## Checking through several DNS resolvers
+
+Off by default, per target. It answers a question the checks above cannot: when a site does not load,
+is the name being answered with a lie, or is the real address blocked? Those need opposite responses,
+and until you know which one you have, you are guessing.
+
+Every check above resolves names through your operating system, so a poisoned answer and a dead TCP
+port produce the same message. The distinction is not cosmetic. One is fixed by changing a setting on
+your own machine; the other cannot be fixed from your machine at all.
+
+### What it does per resolver
+
+**Resolves the name** by sending a DNS query straight over UDP/53 to that resolver's IP. Not through
+a resolver library and not over DNS-over-HTTPS, because the resolvers that matter for this question,
+Shecan, 403.online and Begzar, offer no DoH. A query is A records only.
+
+**Fetches the site through the answer** by re-running the very same HTTP request pinned to the
+returned address. Not a TCP connect, a real request with a real TLS handshake, because Iran also
+filters on SNI: a connect to the correct address succeeds and the handshake is then reset. A TCP
+check would call that reachable and be wrong.
+
+Both halves matter. The address alone tells you what you were told; the fetch tells you whether it
+was true.
+
+Resolvers are queried concurrently. A dozen of them timing out in sequence would take minutes and the
+check would look hung, so a whole pass costs roughly one timeout, not their sum.
+
+### The resolvers
+
+Shecan, 403.online, Begzar and Electro are Iranian anti-sanction resolvers, and they are the ones that
+reveal a local block. Cloudflare and Google are there as a reference to compare against. All six are
+built in.
+
+Add your own by IP in Settings, one per line. IPs only, and not out of pedantry: a resolver given as a
+hostname would have to be resolved by the very DNS this check exists to distrust. A custom entry that
+repeats a built-in is merged rather than probed twice.
+
+Note that 403.online lives on a private address, `10.202.10.202`, reachable only from inside an
+Iranian ISP. From anywhere else it times out, which is correct and costs you nothing but one grey row.
+
+### Findings
+
+| Condition | Finding | Level |
+| --- | --- | --- |
+| a resolver returned a non-routable address while another returned a real one | `website.dnsSinkholed` | critical |
+| your network failed but some resolver's address serves the site | `website.dnsBypass` | warning |
+| not one resolver answered | `website.dnsUnavailable` | warning |
+
+`website.dnsSinkholed` is proof rather than inference. Iran's filtering page sits on `10.10.34.34`, a
+private address, and a private address cannot be a public web server. Anything private, loopback,
+link-local, carrier-grade NAT or `0.0.0.0` counts.
+
+The qualifier matters: it fires only when a **different** resolver returned a routable address. Without
+that, a site genuinely hosted on your LAN would be reported as filtered, since every resolver would
+correctly answer with a private address.
+
+`website.dnsBypass` names the resolvers that still work, so the detail line is the fix.
+
+`website.dnsUnavailable` exists to stop a misdiagnosis. When nothing answers, the useful conclusion is
+that this network blocks outbound port 53, not that your site is broken.
+
+### What is deliberately not reported
+
+Resolvers disagreeing about the address. A CDN hands a different edge to every resolver as a matter of
+routine, and a real check confirms it:
+
+```
+Shecan       178.22.122.100   188.114.99.0     HTTP 200
+Begzar       185.55.226.26    188.114.99.0     HTTP 200
+Cloudflare   1.1.1.1          104.20.23.154    HTTP 200
+Google       8.8.8.8          172.66.147.243   HTTP 200
+```
+
+Four resolvers, three different addresses, nothing wrong. A finding for divergence would fire on
+almost every site behind a CDN, and a warning that is usually wrong is worse than no warning.
+
+### Cost and cadence
+
+One DNS query plus one full HTTP request per resolver, so seven resolvers means seven extra fetches of
+your page. That is why it is off by default, and why it rides the slow clock rather than the main one:
+it runs on **External probe every**, 15 minutes by default, not on **Check every**. Results are carried
+forward in between, exactly like the check-host results. **Check now** forces a fresh pass.
 
 ## Cadence and rate limits
 

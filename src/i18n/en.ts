@@ -49,6 +49,9 @@ export const en = {
   "field.expectedStatus": "Expected status code",
   "field.expectedStatus.hint": "Leave empty to accept anything below 400.",
   "field.expectedBody": "Text that must appear on the page",
+  "field.dnsProbe": "Also check through several DNS resolvers",
+  "field.dnsProbe.hint":
+    "Resolves the address with each resolver and loads the site through every answer, which tells a poisoned name apart from a blocked address.",
   "field.externalProbe": "Also probe from outside using check-host.net",
   "field.externalInterval": "External probe every",
   "field.iranNodes": "Vantage points inside Iran",
@@ -91,6 +94,11 @@ export const en = {
   "status.unreachable": "unreachable",
   "status.pendingNode": "still running",
   "status.noExternal": "No external probe has run yet.",
+  "status.dns": "Through each DNS resolver",
+  "status.dns.custom": "yours",
+  "status.dns.noAddress": "no address returned",
+  "status.dns.hint":
+    "Green means the site loads through that resolver. Red means the resolver handed back an address that cannot serve a public site.",
 
   "server.load": "Load",
   "server.memory": "Memory",
@@ -114,6 +122,12 @@ export const en = {
   "settings.telegramChat": "Telegram chat or channel ID",
   "settings.telegramToken": "Telegram bot token",
   "settings.telegramToken.stored": "A bot token is stored in the system keychain.",
+  "settings.proxy": "Proxy for alerts",
+  "settings.proxy.hint":
+    "Telegram and Discord are blocked in Iran, so alerts need a way out. Point this at the local inbound your v2ray, Xray or Hiddify client already listens on, usually socks5h://127.0.0.1:10808. Accepts http, https, socks5 and socks5h. Site checks ignore it on purpose, otherwise they would measure the tunnel instead of your network.",
+  "settings.dnsResolvers": "Extra DNS resolvers",
+  "settings.dnsResolvers.hint":
+    "One IP address per line, added to the built-in list of Shecan, 403.online, Begzar, Electro, Cloudflare and Google. IPs only: a hostname would have to be resolved by the very DNS being tested.",
   "settings.confirmations": "Failed checks before alerting",
   "settings.confirmations.hint":
     "Guards against a single dropped packet turning into a false alarm. Recoveries are always announced immediately.",
@@ -143,6 +157,9 @@ export const en = {
   "finding.website.unexpectedStatus": "Unexpected status code",
   "finding.website.contentMismatch": "Page content changed",
   "finding.website.externalProbeFailed": "External probe unavailable",
+  "finding.website.dnsSinkholed": "DNS is answering with a fake address",
+  "finding.website.dnsBypass": "Another resolver still reaches it",
+  "finding.website.dnsUnavailable": "No resolver answered",
   "finding.website.healthy": "Site is healthy",
   "finding.server.unreachable": "Server is not answering",
   "finding.server.authenticationFailed": "SSH authentication rejected",
