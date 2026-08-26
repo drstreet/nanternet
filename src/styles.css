@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Vazirmatn", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  --color-surface: oklch(0.19 0.02 250);
+  --color-surface-raised: oklch(0.235 0.021 250);
+  --color-surface-sunken: oklch(0.155 0.018 250);
+  --color-hairline: oklch(0.33 0.02 250);
+  --color-ink: oklch(0.95 0.008 250);
+  --color-ink-muted: oklch(0.72 0.015 250);
+  --color-ink-faint: oklch(0.58 0.015 250);
+  --color-brand: oklch(0.72 0.13 185);
+  --color-good: oklch(0.76 0.16 155);
+  --color-caution: oklch(0.79 0.15 75);
+  --color-bad: oklch(0.68 0.19 20);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-surface text-ink font-sans antialiased;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  a:focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-hairline rounded-full;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@utility field {
+  @apply w-full rounded-lg border border-hairline bg-surface-sunken px-3 py-2 text-sm text-ink
+    placeholder:text-ink-faint focus:border-brand focus:outline-none;
+}
+
+@utility label {
+  @apply mb-1.5 block text-xs font-medium tracking-wide text-ink-muted uppercase;
+}
+
+@utility hint {
+  @apply mt-1.5 text-xs leading-relaxed text-ink-faint;
+}
+
+@utility card {
+  @apply rounded-xl border border-hairline bg-surface-raised;
+}

@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libssl-dev libglib2.0-dev libgtk-3-dev libdbus-1-dev
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      - run: npm run build
+
+      - run: cargo fmt --check
+        working-directory: src-tauri
+
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: src-tauri
+
+      - run: cargo test
+        working-directory: src-tauri
