@@ -38,6 +38,7 @@ Both keys are optional; a missing or absent file yields no targets and default s
   "name": "Company site",
   "enabled": true,
   "intervalSecs": 120,
+  "alerts": null,
   "spec": {}
 }
 ```
@@ -48,6 +49,7 @@ Both keys are optional; a missing or absent file yields no targets and default s
 | `name` | string | required | What appears in the list and in alerts. Trimmed. |
 | `enabled` | boolean | `true` | `false` pauses checks without losing configuration. |
 | `intervalSecs` | number | `120` | Seconds between checks, floored at 15. |
+| `alerts` | `"all"`, `"problems"`, `"critical"`, `"off"` or null | `null` | When this target is worth a notification. `null` follows the global `alerts` setting. |
 | `spec` | object | required | Discriminated by `kind`. |
 
 ## Website spec
@@ -62,7 +64,9 @@ Both keys are optional; a missing or absent file yields no targets and default s
   "expectedStatus": null,
   "expectedBody": null,
   "iranNodes": 3,
-  "abroadNodes": 4
+  "abroadNodes": 4,
+  "iranAlertThreshold": 1,
+  "abroadAlertThreshold": 1
 }
 ```
 
@@ -76,9 +80,16 @@ Both keys are optional; a missing or absent file yields no targets and default s
 | `expectedBody` | string or null | `null` | Case-insensitive substring search of the response body. |
 | `iranNodes` | number | `3` | Iranian vantage points, capped at 8. `0` disables them. |
 | `abroadNodes` | number | `4` | Foreign vantage points, capped at 8. |
+| `iranAlertThreshold` | number | `1` | How many Iranian nodes must fail before `website.ispPartial` is raised. `0` silences it. Clamped to `iranNodes`. |
+| `abroadAlertThreshold` | number | `1` | How many foreign nodes must fail before `website.abroadPartial` is raised. `0` silences it. Clamped to `abroadNodes`. |
 
-Node counts are upper bounds. One node is picked per Iranian ASN and per foreign country, so asking
-for more than there are distinct networks simply gets you all of them.
+Node counts are upper bounds. Inside Iran one node is picked per ASN. Abroad the countries are dealt
+out across continents in the order Asia, Europe, North America, South America, Oceania, Africa, so
+four foreign nodes buy four continents rather than four neighbours. Asking for more than there are
+distinct networks simply gets you all of them.
+
+Both thresholds gate only the partial-failure warnings. Losing every node on one side of the border,
+or everywhere at once, is always reported regardless.
 
 ## Server spec
 
@@ -148,8 +159,9 @@ in the keychain.
 {
   "language": "en",
   "desktopNotifications": true,
+  "alerts": "all",
   "discordWebhook": null,
-  "telegramChatId": null,
+  "telegramChatIds": [],
   "proxyUrl": null,
   "dnsResolvers": [],
   "confirmations": 2,
@@ -162,7 +174,8 @@ in the keychain.
 | `language` | `"en"` or `"fa"` | `"en"` | Anything else falls back to `"en"`. Applies to the interface and to alert text. |
 | `desktopNotifications` | boolean | `true` | The OS notification permission still has the final say. |
 | `discordWebhook` | string or null | `null` | Blank strings are normalised to `null`. |
-| `telegramChatId` | string or null | `null` | Telegram is active only when this is set and a token is stored. |
+| `alerts` | `"all"`, `"problems"`, `"critical"` or `"off"` | `"all"` | Which severities are worth a notification, on every channel. A target's own `alerts` overrides it. |
+| `telegramChatIds` | string array | `[]` | Every alert goes to all of them. Numeric IDs or public `@name`s, validated on save. Duplicates and blanks are dropped, capped at 32. A single legacy `telegramChatId` string is folded in as the first entry on load. |
 | `proxyUrl` | string or null | `null` | Proxy for Discord and Telegram delivery only. Scheme must be `http`, `https`, `socks5` or `socks5h`; anything else is rejected on save. Site checks ignore it. |
 | `dnsResolvers` | string array | `[]` | Extra resolver IP addresses, added to the built-in list. IPs only, hostnames are rejected on save. Capped at 12 including built-ins. |
 | `confirmations` | number | `2` | Consecutive failing checks before alerting. Clamped to 1 through 10. |

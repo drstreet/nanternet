@@ -1,15 +1,3 @@
-//! Asks several DNS resolvers the same question, then fetches the site through
-//! each answer. That is what separates "the name is poisoned, switch resolver"
-//! from "the real address is blocked, a resolver will not help you".
-//!
-//! Speaks DNS over UDP/53 directly instead of pulling in a resolver crate: the
-//! resolvers this is aimed at (Shecan, 403.online, Begzar) offer no DoH, so a
-//! plain socket is the only thing that reaches all of them.
-//! ponytail: A records only, no AAAA, no EDNS0, no TCP retry on truncation.
-//! Enough for "does this name resolve and does that address serve the site".
-//! Upgrade path: if IPv6-only targets ever matter, ask for type 28 alongside
-//! type 1 and widen the answer list from `Ipv4Addr` to `IpAddr`.
-
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
@@ -19,9 +7,6 @@ use crate::config::WebsiteSpec;
 use crate::network_checker;
 use crate::status::{DnsAttempt, DnsReport, Finding, LocalProbe};
 
-/// Resolvers shipped with the app. Iranian anti-sanction resolvers first,
-/// because they are the ones that reveal a local DNS block, then two global
-/// references to compare against.
 pub const BUILTIN: &[(&str, &str)] = &[
     ("Shecan", "178.22.122.100"),
     ("403.online", "10.202.10.202"),
@@ -31,10 +16,9 @@ pub const BUILTIN: &[(&str, &str)] = &[
     ("Google", "8.8.8.8"),
 ];
 
-/// A resolver that never answers must not hold up the scheduler tick.
 const QUERY_TIMEOUT: Duration = Duration::from_secs(4);
 const FETCH_TIMEOUT: Duration = Duration::from_secs(15);
-/// Without EDNS0 a resolver must keep the reply inside 512 bytes.
+
 const REPLY_LIMIT: usize = 512;
 
 pub const MAX_RESOLVERS: usize = 12;
@@ -48,8 +32,6 @@ pub async fn probe(spec: &WebsiteSpec, extra: &[String]) -> DnsReport {
         None => return DnsReport::default(),
     };
 
-    // All resolvers at once. Run in sequence, a dozen of them timing out would
-    // take minutes and the check would look hung.
     let mut roster = Vec::new();
     let mut running = tokio::task::JoinSet::new();
     for (label, address) in resolvers(extra) {
@@ -70,9 +52,6 @@ pub async fn probe(spec: &WebsiteSpec, extra: &[String]) -> DnsReport {
         }
     }
 
-    // A task that panicked must still leave a row behind. Dropping it would
-    // make an unrelated crash look like "this resolver answered nothing", and
-    // enough of those would be reported as the whole network blocking port 53.
     let attempts = collected
         .into_iter()
         .zip(roster)
@@ -102,8 +81,6 @@ fn unfinished(label: String, resolver: IpAddr) -> DnsAttempt {
     }
 }
 
-/// Built-ins plus whatever the user added, deduplicated by address so a custom
-/// entry that repeats a built-in does not double the probe cost.
 fn resolvers(extra: &[String]) -> Vec<(String, String)> {
     let mut list: Vec<(String, String)> = BUILTIN
         .iter()
@@ -151,16 +128,12 @@ async fn attempt(spec: &WebsiteSpec, host: &str, label: String, resolver: IpAddr
     }
 }
 
-/// Runs the site's own check against a single resolved address. Reuses
-/// `probe_locally` so a pinned fetch is judged by exactly the same rules as the
-/// ordinary one, including the expected-body match.
 async fn fetch_through(spec: &WebsiteSpec, host: &str, address: Ipv4Addr) -> Option<LocalProbe> {
     let client = reqwest::Client::builder()
         .no_proxy()
         .user_agent(crate::state::USER_AGENT)
         .timeout(FETCH_TIMEOUT)
         .connect_timeout(Duration::from_secs(8))
-        // Port 0 tells reqwest to keep the port from the URL.
         .resolve_to_addrs(host, &[SocketAddr::new(IpAddr::V4(address), 0)])
         .build()
         .ok()?;
@@ -178,8 +151,7 @@ async fn ask(resolver: IpAddr, host: &str) -> Result<Vec<Ipv4Addr>, String> {
         "[::]:0"
     };
     let socket = UdpSocket::bind(bind).await.map_err(|err| err.to_string())?;
-    // connect() makes the kernel drop datagrams from any other peer, so a
-    // spoofed reply racing the real resolver cannot be read as the answer.
+
     socket
         .connect(SocketAddr::new(resolver, 53))
         .await
@@ -211,12 +183,12 @@ fn encode(id: u16, host: &str) -> Option<Vec<u8>> {
 
     let mut message = Vec::with_capacity(name.len() + 16);
     message.extend_from_slice(&id.to_be_bytes());
-    // Standard query, recursion desired.
+
     message.extend_from_slice(&[0x01, 0x00]);
-    // One question, no answer/authority/additional records.
+
     message.extend_from_slice(&[0, 1, 0, 0, 0, 0, 0, 0]);
     message.extend_from_slice(&name);
-    // QTYPE A, QCLASS IN.
+
     message.extend_from_slice(&[0, 1, 0, 1]);
     Some(message)
 }
@@ -270,9 +242,6 @@ fn decode(message: &[u8], id: u16) -> Result<Vec<Ipv4Addr>, &'static str> {
     Ok(found)
 }
 
-/// Walks past a name without ever following a compression pointer. A pointer
-/// always terminates the name it appears in, so there is no loop to fall into,
-/// and a hostile reply cannot spin us.
 fn skip_name(message: &[u8], mut at: usize) -> Option<usize> {
     loop {
         let length = *message.get(at)?;
@@ -280,7 +249,6 @@ fn skip_name(message: &[u8], mut at: usize) -> Option<usize> {
             0xC0 => return step(message, at, 2),
             0x00 if length == 0 => return step(message, at, 1),
             0x00 => at = step(message, at, 1 + length as usize)?,
-            // Reserved label types have no defined length; refuse to guess.
             _ => return None,
         }
     }
@@ -290,9 +258,6 @@ fn step(message: &[u8], at: usize, by: usize) -> Option<usize> {
     at.checked_add(by).filter(|end| *end <= message.len())
 }
 
-/// Addresses that cannot be a real public web server, so seeing one in an
-/// answer for a public name means the reply was manufactured. Iran's filtering
-/// page lives on 10.10.34.34, which lands in the private range.
 fn is_reserved(address: Ipv4Addr) -> bool {
     address.is_private()
         || address.is_loopback()
@@ -300,7 +265,6 @@ fn is_reserved(address: Ipv4Addr) -> bool {
         || address.is_unspecified()
         || address.is_broadcast()
         || address.is_documentation()
-        // Carrier-grade NAT, 100.64.0.0/10.
         || matches!(address.octets(), [100, 64..=127, _, _])
 }
 
@@ -327,9 +291,6 @@ pub fn classify(report: &DnsReport, local_reachable: bool) -> Vec<Finding> {
 
     let mut findings = Vec::new();
 
-    // Only call a reserved answer a sinkhole when another resolver proved a
-    // public address exists. Without that, a genuinely internal site would be
-    // reported as filtered.
     if answered.iter().any(|attempt| !attempt.reserved) {
         let faked: Vec<&str> = answered
             .iter()
@@ -382,18 +343,19 @@ mod tests {
             expected_body: None,
             iran_nodes: 0,
             abroad_nodes: 0,
+            iran_alert_threshold: 1,
+            abroad_alert_threshold: 1,
         }
     }
 
     fn reply(id: u16, rcode: u8, records: &[(u16, &[u8])]) -> Vec<u8> {
         let question = encode(id, "example.ir").unwrap();
         let mut message = question.clone();
-        // Turn the query into a response carrying `records` answers.
+
         message[2] = 0x81;
         message[3] = rcode;
         message[6..8].copy_from_slice(&(records.len() as u16).to_be_bytes());
         for (kind, data) in records {
-            // Name as a compression pointer back to the question.
             message.extend_from_slice(&[0xC0, 0x0C]);
             message.extend_from_slice(&kind.to_be_bytes());
             message.extend_from_slice(&[0, 1]);
@@ -475,7 +437,6 @@ mod tests {
 
     #[test]
     fn skips_records_that_are_not_addresses() {
-        // A CNAME ahead of the A record must not throw the walk off.
         let message = reply(
             7,
             0,
@@ -511,10 +472,9 @@ mod tests {
     fn survives_a_truncated_or_hostile_reply() {
         let message = reply(1, 0, &[(1, &[8, 8, 8, 8])]);
         for cut in 12..message.len() {
-            // Must return, not panic and not hang, whatever the reply looks like.
             let _ = decode(&message[..cut], 1);
         }
-        // A label length that runs past the buffer must be refused, not trusted.
+
         let mut hostile = message.clone();
         let tail = hostile.len() - 1;
         hostile[tail] = 0x3F;
@@ -523,15 +483,13 @@ mod tests {
 
     #[test]
     fn knows_which_addresses_cannot_serve_a_public_site() {
-        // Iran's filtering page.
         assert!(is_reserved("10.10.34.34".parse().unwrap()));
         assert!(is_reserved("0.0.0.0".parse().unwrap()));
         assert!(is_reserved("127.0.0.1".parse().unwrap()));
         assert!(is_reserved("192.168.1.1".parse().unwrap()));
         assert!(is_reserved("100.100.0.1".parse().unwrap()));
         assert!(!is_reserved("93.184.216.34".parse().unwrap()));
-        // 403.online lives on a private address itself, but that is the
-        // resolver, never the answer.
+
         assert!(!is_reserved("178.22.122.100".parse().unwrap()));
     }
 
@@ -548,7 +506,6 @@ mod tests {
 
     #[test]
     fn leaves_an_internal_site_alone() {
-        // Every resolver agrees on a private address: a LAN host, not a block.
         let report = report(vec![
             attempt("Cloudflare", &["192.168.1.10"], Some(true)),
             attempt("Shecan", &["192.168.1.10"], Some(true)),
@@ -577,7 +534,7 @@ mod tests {
             attempt("Shecan", &["93.184.216.34"], Some(true)),
             attempt("Google", &["93.184.216.35"], Some(true)),
         ]);
-        // Different CDN edges per resolver are normal and must not raise noise.
+
         assert!(classify(&report, true).is_empty());
     }
 
@@ -597,9 +554,6 @@ mod tests {
         assert!(list.len() <= MAX_RESOLVERS);
     }
 
-    /// The unit tests above only prove this encoder agrees with this decoder.
-    /// Run `cargo test -- --ignored --nocapture` on a machine with UDP/53 open
-    /// to confirm a real resolver accepts the query as written.
     #[tokio::test]
     #[ignore = "needs outbound UDP/53"]
     async fn a_real_resolver_understands_the_query() {

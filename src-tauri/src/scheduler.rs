@@ -73,12 +73,9 @@ pub async fn visit(app: AppHandle, target: Target, slow: bool) -> Result<TargetS
     let _ = app.emit(STATUS_EVENT, &status);
 
     let settings = state.settings().await;
-    if state.announce(&status, settings.confirmations).await {
-        let alert = Alert {
-            target: target.name.clone(),
-            level: status.level,
-            findings: status.findings.clone(),
-        };
+    let rule = target.alerts.unwrap_or(settings.alerts);
+    if state.announce(&status, settings.confirmations).await && rule.allows(status.level) {
+        let alert = Alert::of(&target, &status);
         notification_engine::dispatch(&app, &settings, &alert).await;
     }
 

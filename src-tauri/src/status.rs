@@ -131,6 +131,31 @@ impl NodeResult {
             format!("{} ({})", self.city, self.country.to_uppercase())
         }
     }
+
+    pub fn region(&self) -> &'static str {
+        if self.inside_iran() {
+            "IR"
+        } else {
+            continent(&self.country)
+        }
+    }
+}
+
+pub fn continent(country: &str) -> &'static str {
+    match country.to_ascii_lowercase().as_str() {
+        "al" | "at" | "ba" | "be" | "bg" | "by" | "ch" | "cy" | "cz" | "de" | "dk" | "ee"
+        | "es" | "fi" | "fr" | "gb" | "gr" | "hr" | "hu" | "ie" | "is" | "it" | "lt" | "lu"
+        | "lv" | "md" | "me" | "mk" | "mt" | "nl" | "no" | "pl" | "pt" | "ro" | "rs" | "ru"
+        | "se" | "si" | "sk" | "ua" => "EU",
+        "ae" | "am" | "az" | "bd" | "bh" | "cn" | "ge" | "hk" | "id" | "il" | "in" | "iq"
+        | "ir" | "jo" | "jp" | "kr" | "kw" | "kz" | "lb" | "lk" | "my" | "np" | "om" | "ph"
+        | "pk" | "qa" | "sa" | "sg" | "th" | "tr" | "tw" | "uz" | "vn" => "AS",
+        "ca" | "cr" | "do" | "gt" | "mx" | "pa" | "pr" | "us" => "NA",
+        "ar" | "bo" | "br" | "cl" | "co" | "ec" | "pe" | "py" | "uy" | "ve" => "SA",
+        "dz" | "eg" | "et" | "gh" | "ke" | "ma" | "mu" | "ng" | "tn" | "za" => "AF",
+        "au" | "nz" => "OC",
+        _ => "??",
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,7 +174,6 @@ pub struct WebsiteReport {
     pub external_error: Option<String>,
 }
 
-/// One resolver's answer, plus the result of fetching the site through it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DnsAttempt {
@@ -157,7 +181,6 @@ pub struct DnsAttempt {
     pub resolver: String,
     pub builtin: bool,
     pub answers: Vec<String>,
-    /// Every returned address is non-routable, the shape of a filtering reply.
     pub reserved: bool,
     pub error: Option<String>,
     pub probe: Option<LocalProbe>,

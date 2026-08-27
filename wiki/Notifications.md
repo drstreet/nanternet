@@ -41,6 +41,28 @@ that were never broken.
 Time to alert is roughly the check interval multiplied by this number. With a 2 minute interval and
 the default of 2, expect to hear within about 4 minutes.
 
+### Choosing which verdicts are worth hearing
+
+`Notify me about` in Settings decides which severities actually leave the app, on every channel at
+once.
+
+| Value | Behaviour |
+| --- | --- |
+| Everything, including recoveries | the default, every change of verdict |
+| Warnings and worse | nothing while a target is healthy |
+| Critical only | warnings stay in the app, only outages reach you |
+| Nothing | the app keeps watching and shows everything, but sends nothing |
+
+Recoveries are themselves a change of verdict to healthy, so anything other than the first option means
+no "back to normal" message either. That is the trade: a channel that only speaks when something is
+wrong cannot also tell you when it stops being wrong.
+
+Every target has the same setting on its own edit screen, plus a fifth option to follow the global one,
+which is the default. This is how a staging site that goes down nightly stays quiet while production
+still shouts. The confirmation counter and the change-of-verdict rule run first and are unaffected: a
+suppressed alert is one the app decided was worth sending and you decided not to receive, so silencing
+a target does not leave stale state behind when you turn it back on.
+
 ## Channels
 
 All configured channels get every alert. There is no per-channel severity filter, because a system
@@ -57,8 +79,13 @@ them in System Settings under Notifications.
 Paste a webhook URL. In Discord: Server Settings, Integrations, Webhooks, New Webhook, then Copy
 Webhook URL. It looks like `https://discord.com/api/webhooks/<id>/<token>`.
 
-The message is posted with the title in bold and the findings below. Content is capped at 1900
-characters, under Discord's limit, with an ellipsis if it would run over.
+The message carries the same content as the Telegram one described below, with the grid wrapped in a
+Markdown code fence so the columns stay aligned. Discord has no native table, so this is a monospace
+block rather than a real one. Content is capped at 1900 characters, under Discord's limit, with an
+ellipsis if it would run over.
+
+Desktop notifications get the findings only. There is no monospace font and about two lines of room
+there, so a grid would only be mangled and then cut off.
 
 Treat the URL as a secret. Anyone holding it can post to that channel. It lives in the config file
 rather than the keychain, because unlike a password it is a location as much as a credential, and
@@ -72,14 +99,68 @@ The **bot token** comes from [@BotFather](https://t.me/botfather): send `/newbot
 and copy the token, which looks like `123456789:AAH...`. This is a real credential and goes to the
 system keychain, not to the config file.
 
-The **chat ID** is where messages go. For a private chat with yourself, message
-[@userinfobot](https://t.me/userinfobot) to get your numeric ID. For a channel or group, add the bot
-as a member first, then use the numeric ID, which for channels starts with `-100`.
+The **chats and channels** box is where messages go, one entry per line and up to 32 of them. Every
+alert is delivered to all of them at once, in parallel, so one unreachable chat does not hold up the
+rest. For a private chat with yourself, message [@userinfobot](https://t.me/userinfobot) to get your
+numeric ID. For a channel or group, add the bot as a member first, then use the numeric ID, which for
+channels starts with `-100`. A public channel can also be given as `@name`. Entries are checked on
+save, so a typo is reported rather than silently dropped.
 
-Messages are sent as plain text with link previews disabled, capped at 3900 characters. Plain text
-rather than HTML or Markdown is deliberate: finding details contain arbitrary strings such as error
-messages and container names, and a stray `<` or `_` in one of those would make Telegram reject the
-whole message. Losing an alert to a formatting error is not a trade worth making.
+### What a Telegram alert looks like
+
+Alerts go out through `sendRichMessage`, the rich message method added in Bot API 10.1, which means the
+grid is a real `<table>` that the Telegram client lays out itself:
+
+| ORIGIN | VANTAGE POINT | PING | RESULT |
+| --- | --- | --- | --- |
+| 🟢 LOCAL | your network | 143 ms | 200 |
+| 🟢 IR | Tehran (IR) | 291 ms | 200 |
+| 🔵 IR | Shiraz (IR) | 548 ms | 200 |
+| 🟡 EU | Vienna (AT) | 1047 ms | 200 |
+| 🟠 NA | Vancouver (CA) | 2482 ms | 200 |
+| 🔴 AS | Jakarta (ID) | - | Connection timed out |
+
+The dot grades that row against its own threshold. For a vantage point that is round-trip time: green
+under 500 ms, blue under 1000, yellow under 2000, orange above it, and red when nothing answered. An
+HTTP 4xx or 5xx caps the row at orange, because the host did reply. A white dot means the probe is
+still running.
+
+Server rows are graded against the limits you configured rather than a fixed number, so 80% memory is
+yellow when your limit is 95 and orange when it is 85. Certificate and registration rows are graded
+against that domain's own warning window.
+
+Above it sits the heading, the address being watched, and one paragraph per finding: the localized
+condition in bold with the raw measurement underneath. Below it is a link straight to the check-host
+report for that run.
+
+Websites get one row per vantage point plus your own network and each DNS resolver. Servers get load,
+memory, disks and containers against their limits. Domains get the certificate and registration dates.
+
+The table is always English, headings included. Persian headings in a right-to-left table put a Persian
+word next to a Latin city name in the same row, and the result reordered on screen badly enough to be
+worth losing the translation over.
+
+Persian alerts are sent with `is_rtl`, so the message and the table are laid out right to left. Each
+Latin run inside them is wrapped in a bidirectional isolate. Without it the bidirectional algorithm
+reorders Latin text that sits at the edge of a right-to-left paragraph, which is how
+`1 of 3 nodes failed` used to reach the reader as `of 3 nodes failed 1`.
+
+Rich messages allow 32768 characters and 500 blocks, far more than an alert needs. The message is
+capped anyway at 8 findings, 16 table rows and 44 characters per cell, so one long upstream error
+cannot push the table off the screen.
+
+### When rich messages are not available
+
+If `sendRichMessage` is refused for any reason, the alert is immediately retried through plain
+`sendMessage` with `parse_mode: HTML`, where the grid becomes a monospace `<pre>` block with columns
+padded by hand. It is less pretty and it carries the same information.
+
+Everything interpolated into either format is escaped, because finding details are arbitrary upstream
+strings and a stray `<` in one would make Telegram reject the whole message. Only a real `https://`
+report URL is allowed to become a link. Since escaping can grow a string fivefold, a `sendMessage`
+fallback that still will not fit under 3900 characters is sent unformatted rather than truncated:
+cutting HTML mid-tag loses the entire message, and losing an alert to a formatting error is not a
+trade worth making.
 
 Telegram's API is not reachable from most Iranian networks without a proxy, which is what the setting
 below is for.
