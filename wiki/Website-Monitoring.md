@@ -41,7 +41,13 @@ check-host node being slow is not evidence about your site.
 ## Node selection
 
 Around 58 nodes are available, roughly 8 of them in Iran. Rather than take whatever comes first, one
-node is picked per network, deduplicating Iranian nodes by ASN and foreign nodes by country.
+node is picked per network: Iranian nodes are deduplicated by ASN, foreign nodes by country.
+
+Foreign nodes then go one step further and rotate through continents in the order Asia, Europe, North
+America, South America, Oceania, Africa. Country deduplication alone still left four foreign nodes
+clustered in Europe, so a single bad transit route over there looked like a global outage. Four nodes
+now mean four continents, and only once every continent has been used does a second node from an
+already-used one get picked.
 
 This is the difference between a useful signal and an average. Three Iranian nodes on the same ASN
 tell you about one operator three times. Three nodes on three ASNs tell you whether the problem is
@@ -112,7 +118,17 @@ Iranian node fails. Your site is up but Iranian visitors cannot get to it.
 
 `website.ispPartial` is the warning you asked for when you said some connections cannot reach the
 server. The detail line names which vantage points failed and what error they got, so you can tell
-whether it is one operator or a coincidence.
+whether it is one operator or a coincidence. `website.abroadPartial` is its mirror for foreign nodes.
+
+### Deciding when a partial failure is worth an alert
+
+Both partial warnings are gated by a per-site threshold, **Warn when this many Iranian nodes fail**
+and its foreign counterpart. A site behind a picky CDN can lose the same flaky node every day; a site
+that is actually being blocked loses several at once. Set the threshold to 2 and one lost node stays
+quiet while two speak up. Set it to **Never** and that group stops raising partial warnings at all.
+
+The threshold only touches the partial warnings. `iranAccess`, `blockedLocally`, `blockedInsideIran`
+and `down` are all-or-nothing verdicts and are never suppressed, because none of them is ever noise.
 
 ## Checking through several DNS resolvers
 

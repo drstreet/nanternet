@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 
 import { sendTestNotification } from "../api";
 import { useI18n } from "../i18n";
-import type { Language, Settings as SettingsShape, SettingsView } from "../types";
+import type { AlertLevel, Language, Settings as SettingsShape, SettingsView } from "../types";
 import { Button, Toggle, lines } from "./primitives";
+
+export const ALERT_LEVELS: AlertLevel[] = ["all", "problems", "critical", "off"];
 
 interface Props {
   settings: SettingsView;
@@ -14,13 +16,15 @@ export function Settings({ settings, onSave }: Props) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<SettingsShape>(settings);
   const [telegramToken, setTelegramToken] = useState("");
-  // Kept as raw text so typing a newline is not swallowed mid-edit.
+
   const [resolvers, setResolvers] = useState(settings.dnsResolvers.join("\n"));
+  const [chats, setChats] = useState(settings.telegramChatIds.join("\n"));
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setDraft(settings);
     setResolvers(settings.dnsResolvers.join("\n"));
+    setChats(settings.telegramChatIds.join("\n"));
   }, [settings]);
 
   const patch = <K extends keyof SettingsShape>(key: K, value: SettingsShape[K]) => {
@@ -29,7 +33,11 @@ export function Settings({ settings, onSave }: Props) {
   };
 
   const submit = async () => {
-    const next = { ...draft, dnsResolvers: lines(resolvers) };
+    const next = {
+      ...draft,
+      dnsResolvers: lines(resolvers),
+      telegramChatIds: lines(chats),
+    };
     if (!(await onSave(next, telegramToken.length > 0 ? telegramToken : undefined))) return;
     setTelegramToken("");
     setSaved(true);
@@ -91,18 +99,42 @@ export function Settings({ settings, onSave }: Props) {
           />
         </div>
 
+        <div>
+          <label className="label" htmlFor="settings-alerts">
+            {t("settings.alerts")}
+          </label>
+          <select
+            id="settings-alerts"
+            className="field"
+            value={draft.alerts}
+            onChange={(event) => patch("alerts", event.target.value as AlertLevel)}
+          >
+            {ALERT_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {t(`alerts.${level}`)}
+              </option>
+            ))}
+          </select>
+          <p className="hint">{t("settings.alerts.hint")}</p>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="settings-telegram-chat">
               {t("settings.telegramChat")}
             </label>
-            <input
+            <textarea
               id="settings-telegram-chat"
+              rows={3}
               className="field font-mono"
-              placeholder="-1001234567890"
-              value={draft.telegramChatId ?? ""}
-              onChange={(event) => patch("telegramChatId", event.target.value || null)}
+              placeholder="-1001234567890&#10;@mychannel&#10;123456789"
+              value={chats}
+              onChange={(event) => {
+                setSaved(false);
+                setChats(event.target.value);
+              }}
             />
+            <p className="hint">{t("settings.telegramChat.hint")}</p>
           </div>
           <div>
             <label className="label" htmlFor="settings-telegram-token">

@@ -140,6 +140,7 @@ pub async fn save_settings(
     settings.normalize();
     check_proxy(settings.proxy_url.as_deref())?;
     check_resolvers(&settings.dns_resolvers)?;
+    check_chats(&settings.telegram_chat_ids)?;
 
     match telegram_token.as_deref().map(str::trim) {
         Some("") => secrets::forget(secrets::TELEGRAM_TOKEN).await?,
@@ -173,21 +174,18 @@ pub async fn save_settings(
 #[tauri::command]
 pub async fn send_test_notification(app: AppHandle) -> Result<()> {
     let settings = app.state::<AppState>().settings().await;
-    let alert = notification_engine::Alert {
-        target: "IranNANternet".to_owned(),
-        level: crate::status::Level::Ok,
-        findings: vec![crate::status::Finding::ok(
+    let alert = notification_engine::Alert::note(
+        "IranNANternet",
+        crate::status::Level::Ok,
+        vec![crate::status::Finding::ok(
             "website.healthy",
             "test alert from the settings screen",
         )],
-    };
+    );
     notification_engine::dispatch(&app, &settings, &alert).await;
     Ok(())
 }
 
-/// A proxy URL becomes a network destination for the bot token, so it is checked
-/// here rather than trusted. Local v2ray/xray clients expose a SOCKS5 inbound,
-/// which is why socks5h is accepted alongside plain HTTP proxies.
 fn check_proxy(url: Option<&str>) -> Result<()> {
     let Some(url) = url else {
         return Ok(());
@@ -205,8 +203,25 @@ fn check_proxy(url: Option<&str>) -> Result<()> {
     }
 }
 
-/// Resolvers are addressed by IP on purpose: a hostname would have to be
-/// resolved by the very DNS this feature exists to distrust.
+fn check_chats(chats: &[String]) -> Result<()> {
+    for entry in chats {
+        let numeric = entry
+            .strip_prefix('-')
+            .unwrap_or(entry)
+            .chars()
+            .all(|character| character.is_ascii_digit());
+        let handle = entry.strip_prefix('@').is_some_and(|name| {
+            name.len() >= 4 && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+        });
+        if !(numeric && entry.len() > 1 || handle) {
+            return Err(Error::msg(format!(
+                "{entry:?} is not a chat id; use a number such as -1001234567890 or a public @name"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn check_resolvers(resolvers: &[String]) -> Result<()> {
     for entry in resolvers {
         if entry.parse::<std::net::IpAddr>().is_err() {
