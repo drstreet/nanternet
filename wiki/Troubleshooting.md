@@ -35,9 +35,11 @@ the vantage point list: if every foreign node reports a timeout while the Irania
 your site really is unreachable from outside. Open the check-host report link for the raw upstream
 view.
 
-The rare false positive comes from configuring only one or two foreign nodes and having both land in a
-region with a transient problem. Raise **Vantage points abroad** to 4 or more; one node per country is
-picked, so a higher number really does mean more independent evidence.
+The rare false positive comes from configuring only one or two foreign nodes and having them land in a
+region with a transient problem. Raise **Vantage points abroad** to 4 or more; nodes are dealt out one
+per continent, so a higher number really does mean more independent evidence. If a particular site
+always loses the same node, raise **Warn when this many foreign nodes fail** instead of turning the
+external probe off.
 
 ### A site is down but reports healthy
 

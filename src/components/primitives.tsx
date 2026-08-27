@@ -165,7 +165,6 @@ export function interval(seconds: number): string {
   return `${seconds}s`;
 }
 
-/** Splits a multi-line textarea into trimmed, non-empty entries. */
 export function lines(value: string): string[] {
   return value
     .split("\n")

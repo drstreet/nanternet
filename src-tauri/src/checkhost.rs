@@ -6,7 +6,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
-use crate::status::NodeResult;
+use crate::status::{continent, NodeResult};
 
 const ENDPOINT: &str = "https://check-host.net";
 const NODE_CACHE_TTL: Duration = Duration::from_secs(6 * 3600);
@@ -106,10 +106,9 @@ impl CheckHost {
             iran,
             |node| node.asn.clone(),
         ));
-        chosen.extend(spread(
+        chosen.extend(spread_regions(
             all.iter().filter(|node| !node.inside_iran()),
             abroad,
-            |node| node.country.to_ascii_lowercase(),
         ));
         if chosen.is_empty() {
             return Err(Error::msg("no usable check-host nodes were available"));
@@ -195,6 +194,50 @@ impl CheckHost {
             nodes: results,
         })
     }
+}
+
+const REGION_ORDER: [&str; 7] = ["AS", "EU", "NA", "SA", "OC", "AF", "??"];
+
+fn spread_regions<'a>(candidates: impl Iterator<Item = &'a Node>, limit: usize) -> Vec<Node> {
+    if limit == 0 {
+        return Vec::new();
+    }
+
+    let mut buckets: HashMap<&'static str, Vec<Node>> = HashMap::new();
+    let mut seen = HashSet::new();
+    let mut spare = Vec::new();
+    for node in candidates {
+        if seen.insert(node.country.to_ascii_lowercase()) {
+            buckets
+                .entry(continent(&node.country))
+                .or_default()
+                .push(node.clone());
+        } else {
+            spare.push(node.clone());
+        }
+    }
+
+    let mut chosen = Vec::with_capacity(limit);
+    for lap in 0.. {
+        let mut dealt = false;
+        for region in REGION_ORDER {
+            let Some(node) = buckets.get(region).and_then(|nodes| nodes.get(lap)) else {
+                continue;
+            };
+            chosen.push(node.clone());
+            dealt = true;
+            if chosen.len() == limit {
+                return chosen;
+            }
+        }
+        if !dealt {
+            break;
+        }
+    }
+
+    chosen.extend(spare);
+    chosen.truncate(limit);
+    chosen
 }
 
 fn spread<'a, I, K>(candidates: I, limit: usize, key: K) -> Vec<Node>
@@ -309,6 +352,36 @@ mod tests {
         let outcome = parse(r#"[[0, 0.17, "Not Found", "404", "94.242.206.94"]]"#).unwrap();
         assert!(outcome.reachable);
         assert_eq!(outcome.status.as_deref(), Some("404"));
+    }
+
+    #[test]
+    fn foreign_nodes_are_dealt_across_continents() {
+        let all = [
+            node("at1", "at", "AS1"),
+            node("bg1", "bg", "AS2"),
+            node("br1", "br", "AS3"),
+            node("ca1", "ca", "AS4"),
+            node("de1", "de", "AS5"),
+            node("jp1", "jp", "AS6"),
+            node("us1", "us", "AS7"),
+        ];
+        let picked = spread_regions(all.iter(), 4);
+        let regions: Vec<_> = picked.iter().map(|node| continent(&node.country)).collect();
+        assert_eq!(regions, ["AS", "EU", "NA", "SA"]);
+    }
+
+    #[test]
+    fn a_second_node_in_one_country_waits_until_every_other_is_used() {
+        let all = [
+            node("de1", "de", "AS1"),
+            node("de2", "de", "AS2"),
+            node("us1", "us", "AS3"),
+        ];
+        let picked: Vec<_> = spread_regions(all.iter(), 3)
+            .iter()
+            .map(|node| node.host.clone())
+            .collect();
+        assert_eq!(picked, ["de1", "us1", "de2"]);
     }
 
     #[test]

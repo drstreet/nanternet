@@ -18,6 +18,8 @@ export interface WebsiteSpec {
   expectedBody: string | null;
   iranNodes: number;
   abroadNodes: number;
+  iranAlertThreshold: number;
+  abroadAlertThreshold: number;
 }
 
 export type SshAuth = { method: "key"; path: string } | { method: "password" };
@@ -49,11 +51,14 @@ export type TargetSpec = WebsiteSpec | ServerSpec | DomainSpec;
 
 export type TargetKind = TargetSpec["kind"];
 
+export type AlertLevel = "all" | "problems" | "critical" | "off";
+
 export interface Target {
   id: string;
   name: string;
   enabled: boolean;
   intervalSecs: number;
+  alerts: AlertLevel | null;
   spec: TargetSpec;
 }
 
@@ -170,8 +175,9 @@ export interface TargetStatus {
 export interface Settings {
   language: Language;
   desktopNotifications: boolean;
+  alerts: AlertLevel;
   discordWebhook: string | null;
-  telegramChatId: string | null;
+  telegramChatIds: string[];
   proxyUrl: string | null;
   dnsResolvers: string[];
   confirmations: number;

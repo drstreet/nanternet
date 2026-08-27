@@ -148,24 +148,24 @@ pub fn classify(spec: &WebsiteSpec, report: &WebsiteReport) -> Vec<Finding> {
         ));
     }
 
-    if inside.answered > 0 && inside.reachable < inside.answered {
+    if breached(inside.failed(), spec.iran_alert_threshold) {
         findings.push(Finding::warn(
             "website.ispPartial",
             format!(
                 "{} of {} Iranian vantage points failed: {}",
-                inside.answered - inside.reachable,
+                inside.failed(),
                 inside.answered,
                 inside.failures.join(", ")
             ),
         ));
     }
 
-    if outside.answered > 0 && outside.reachable < outside.answered {
+    if breached(outside.failed(), spec.abroad_alert_threshold) {
         findings.push(Finding::warn(
             "website.abroadPartial",
             format!(
                 "{} of {} outside vantage points failed: {}",
-                outside.answered - outside.reachable,
+                outside.failed(),
                 outside.answered,
                 outside.failures.join(", ")
             ),
@@ -189,6 +189,10 @@ pub fn classify(spec: &WebsiteSpec, report: &WebsiteReport) -> Vec<Finding> {
     findings
 }
 
+fn breached(failed: usize, threshold: usize) -> bool {
+    threshold > 0 && failed >= threshold
+}
+
 struct Tally {
     answered: usize,
     reachable: usize,
@@ -196,6 +200,10 @@ struct Tally {
 }
 
 impl Tally {
+    fn failed(&self) -> usize {
+        self.answered - self.reachable
+    }
+
     fn of<'a>(nodes: impl Iterator<Item = &'a NodeResult>) -> Self {
         let mut tally = Self {
             answered: 0,
@@ -253,6 +261,8 @@ mod tests {
             expected_body: None,
             iran_nodes: 2,
             abroad_nodes: 2,
+            iran_alert_threshold: 1,
+            abroad_alert_threshold: 1,
         }
     }
 
@@ -359,6 +369,45 @@ mod tests {
         let findings = classify(
             &spec(),
             &report(local(true), vec![node("de", None), node("ir", None)]),
+        );
+        assert_eq!(findings[0].code, "website.healthy");
+    }
+
+    #[test]
+    fn one_failing_foreign_node_stays_quiet_when_the_site_asked_for_two() {
+        let mut spec = spec();
+        spec.abroad_alert_threshold = 2;
+        let quiet = report(
+            local(true),
+            vec![node("de", Some(true)), node("us", Some(false))],
+        );
+        assert_eq!(classify(&spec, &quiet)[0].code, "website.healthy");
+
+        let loud = report(
+            local(true),
+            vec![
+                node("de", Some(true)),
+                node("us", Some(false)),
+                node("br", Some(false)),
+            ],
+        );
+        assert_eq!(classify(&spec, &loud)[0].code, "website.abroadPartial");
+    }
+
+    #[test]
+    fn a_zero_threshold_silences_the_group_entirely() {
+        let mut spec = spec();
+        spec.iran_alert_threshold = 0;
+        let findings = classify(
+            &spec,
+            &report(
+                local(true),
+                vec![
+                    node("de", Some(true)),
+                    node("ir", Some(true)),
+                    node("ir", Some(false)),
+                ],
+            ),
         );
         assert_eq!(findings[0].code, "website.healthy");
     }

@@ -3,11 +3,37 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
+use crate::status::Level;
 
 pub const MIN_INTERVAL: u64 = 15;
 pub const MIN_EXTERNAL_INTERVAL: u64 = 300;
 pub const MAX_PROBE_NODES: usize = 8;
 pub const REGISTRATION_INTERVAL: u64 = 43_200;
+pub const MAX_TELEGRAM_CHATS: usize = 32;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AlertLevel {
+    All,
+    Problems,
+    Critical,
+    Off,
+}
+
+impl AlertLevel {
+    pub fn allows(self, level: Level) -> bool {
+        match self {
+            AlertLevel::All => true,
+            AlertLevel::Problems => level >= Level::Warn,
+            AlertLevel::Critical => level >= Level::Critical,
+            AlertLevel::Off => false,
+        }
+    }
+}
+
+fn default_alerts() -> AlertLevel {
+    AlertLevel::All
+}
 
 fn enabled() -> bool {
     true
@@ -27,6 +53,10 @@ fn default_iran_nodes() -> usize {
 
 fn default_abroad_nodes() -> usize {
     4
+}
+
+fn default_alert_threshold() -> usize {
+    1
 }
 
 fn default_ssh_port() -> u16 {
@@ -69,8 +99,6 @@ pub struct WebsiteSpec {
     pub external_probe: bool,
     #[serde(default = "default_external_interval")]
     pub external_interval_secs: u64,
-    /// Resolve through several DNS servers and fetch the site through each
-    /// answer. Off by default: it costs one request per resolver.
     #[serde(default)]
     pub dns_probe: bool,
     #[serde(default)]
@@ -81,6 +109,10 @@ pub struct WebsiteSpec {
     pub iran_nodes: usize,
     #[serde(default = "default_abroad_nodes")]
     pub abroad_nodes: usize,
+    #[serde(default = "default_alert_threshold")]
+    pub iran_alert_threshold: usize,
+    #[serde(default = "default_alert_threshold")]
+    pub abroad_alert_threshold: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,6 +179,8 @@ pub struct Target {
     pub enabled: bool,
     #[serde(default = "default_interval")]
     pub interval_secs: u64,
+    #[serde(default)]
+    pub alerts: Option<AlertLevel>,
     pub spec: TargetSpec,
 }
 
@@ -169,6 +203,10 @@ impl Target {
                     .max(self.interval_secs);
                 spec.iran_nodes = spec.iran_nodes.min(MAX_PROBE_NODES);
                 spec.abroad_nodes = spec.abroad_nodes.min(MAX_PROBE_NODES);
+
+                spec.iran_alert_threshold = spec.iran_alert_threshold.min(spec.iran_nodes.max(1));
+                spec.abroad_alert_threshold =
+                    spec.abroad_alert_threshold.min(spec.abroad_nodes.max(1));
                 if let Some(body) = &spec.expected_body {
                     if body.trim().is_empty() {
                         spec.expected_body = None;
@@ -220,17 +258,16 @@ pub struct Settings {
     pub language: String,
     #[serde(default = "enabled")]
     pub desktop_notifications: bool,
+    #[serde(default = "default_alerts")]
+    pub alerts: AlertLevel,
     #[serde(default)]
     pub discord_webhook: Option<String>,
     #[serde(default)]
+    pub telegram_chat_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub telegram_chat_id: Option<String>,
-    /// Proxy for outbound alerts only. Telegram and Discord are blocked in
-    /// Iran, so without this the app can watch a site but never report on it.
-    /// Site probes deliberately ignore it: routing them through a tunnel would
-    /// answer the wrong question.
     #[serde(default)]
     pub proxy_url: Option<String>,
-    /// Extra DNS resolver addresses on top of the built-in list.
     #[serde(default)]
     pub dns_resolvers: Vec<String>,
     #[serde(default = "default_confirmations")]
@@ -244,7 +281,9 @@ impl Default for Settings {
         Self {
             language: default_language(),
             desktop_notifications: true,
+            alerts: default_alerts(),
             discord_webhook: None,
+            telegram_chat_ids: Vec::new(),
             telegram_chat_id: None,
             proxy_url: None,
             dns_resolvers: Vec::new(),
@@ -261,8 +300,20 @@ impl Settings {
         }
         self.confirmations = self.confirmations.clamp(1, 10);
         blank_to_none(&mut self.discord_webhook);
-        blank_to_none(&mut self.telegram_chat_id);
         blank_to_none(&mut self.proxy_url);
+
+        if let Some(single) = self.telegram_chat_id.take() {
+            self.telegram_chat_ids.insert(0, single);
+        }
+        let mut seen = std::collections::HashSet::new();
+        self.telegram_chat_ids = self
+            .telegram_chat_ids
+            .iter()
+            .map(|entry| entry.trim().to_owned())
+            .filter(|entry| !entry.is_empty() && seen.insert(entry.clone()))
+            .collect();
+        self.telegram_chat_ids.truncate(MAX_TELEGRAM_CHATS);
+
         self.dns_resolvers = self
             .dns_resolvers
             .iter()
@@ -295,7 +346,11 @@ pub struct Store {
 impl Store {
     pub fn load(path: &Path) -> Result<Self> {
         match std::fs::read(path) {
-            Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
+            Ok(bytes) => {
+                let mut store: Self = serde_json::from_slice(&bytes)?;
+                store.settings.normalize();
+                Ok(store)
+            }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(err) => Err(err.into()),
         }
@@ -320,4 +375,65 @@ fn staging_path(path: &Path) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".staging");
     path.with_file_name(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rule_only_lets_through_what_it_names() {
+        let levels = [Level::Ok, Level::Warn, Level::Critical];
+        let passing = |rule: AlertLevel| levels.iter().filter(|level| rule.allows(**level)).count();
+        assert_eq!(passing(AlertLevel::All), 3);
+        assert_eq!(passing(AlertLevel::Problems), 2);
+        assert_eq!(passing(AlertLevel::Critical), 1);
+        assert_eq!(passing(AlertLevel::Off), 0);
+        assert!(AlertLevel::All.allows(Level::Unknown));
+        assert!(!AlertLevel::Problems.allows(Level::Unknown));
+    }
+
+    #[test]
+    fn a_single_stored_chat_id_survives_as_the_first_of_the_list() {
+        let stored = r#"{"settings":{"telegramChatId":"-100111"}}"#;
+        let mut store: Store = serde_json::from_str(stored).unwrap();
+        store.settings.normalize();
+        assert_eq!(store.settings.telegram_chat_ids, ["-100111"]);
+        assert!(store.settings.telegram_chat_id.is_none());
+
+        let written = serde_json::to_string(&store.settings).unwrap();
+        assert!(!written.contains("telegramChatId\""));
+    }
+
+    #[test]
+    fn chat_ids_are_trimmed_and_never_repeated() {
+        let mut settings = Settings {
+            telegram_chat_ids: vec![
+                " -100111 ".into(),
+                "".into(),
+                "-100111".into(),
+                "@channel".into(),
+            ],
+            ..Settings::default()
+        };
+        settings.normalize();
+        assert_eq!(settings.telegram_chat_ids, ["-100111", "@channel"]);
+    }
+
+    #[test]
+    fn a_missing_rule_falls_back_to_the_global_one() {
+        let mut target: Target =
+            serde_json::from_str(r#"{"name":"a","spec":{"kind":"domain","domain":"x.ir"}}"#)
+                .unwrap();
+        assert_eq!(target.alerts, None);
+        assert_eq!(
+            target.alerts.unwrap_or(AlertLevel::Problems),
+            AlertLevel::Problems
+        );
+        target.alerts = Some(AlertLevel::Off);
+        assert_eq!(
+            target.alerts.unwrap_or(AlertLevel::Problems),
+            AlertLevel::Off
+        );
+    }
 }
