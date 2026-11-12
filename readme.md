@@ -127,6 +127,25 @@ SSH passwords, key passphrases and the Telegram bot token never touch that file.
 operating system credential store: Keychain on macOS, Credential Manager on Windows, Secret Service
 on Linux.
 
+## Installing
+
+Ready-made bundles for macOS (Apple Silicon and Intel), Windows and Linux are attached to every
+[release](https://github.com/drstreet/nanternet/releases). They are not code-signed yet, so each
+platform asks for confirmation once, before the first launch:
+
+- **macOS** says the app is damaged or comes from an unidentified developer. Drag it into
+  Applications, then clear the quarantine flag:
+
+  ```sh
+  xattr -cr /Applications/IranNANternet.app
+  ```
+
+  Alternatively, try to open it once, then go to System Settings → Privacy & Security and choose
+  Open Anyway.
+- **Windows** SmartScreen shows "Windows protected your PC". Choose More info, then Run anyway.
+- **Linux** needs nothing extra for the `.deb` and `.rpm` packages. An AppImage has to be marked
+  executable first with `chmod +x IranNANternet_*.AppImage`.
+
 ## Running it
 
 Requires Node 20+ and a Rust toolchain, plus the

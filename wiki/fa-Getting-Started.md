@@ -2,6 +2,28 @@
 
 # شروع به کار
 
+## نصب
+
+بسته‌های آماده برای مک (Apple Silicon و Intel)، ویندوز و لینوکس به هر
+[ریلیز](https://github.com/drstreet/nanternet/releases) پیوست می‌شوند. این بسته‌ها هنوز امضای کد
+ندارند، برای همین هر سیستم‌عامل پیش از اولین اجرا یک بار تأیید می‌خواهد:
+
+- **مک** می‌گوید برنامه آسیب دیده یا از توسعه‌دهنده ناشناس است. برنامه را به Applications بکشید و
+  بعد پرچم قرنطینه را پاک کنید:
+
+  ```sh
+  xattr -cr /Applications/IranNANternet.app
+  ```
+
+  راه دیگر این است که یک بار بازش کنید، بعد به System Settings → Privacy & Security بروید و
+  Open Anyway را بزنید.
+- **ویندوز** پیام SmartScreen با عنوان «Windows protected your PC» نشان می‌دهد. More info و بعد
+  Run anyway را بزنید.
+- **لینوکس** برای بسته‌های `.deb` و `.rpm` کار اضافه‌ای لازم ندارد. فایل AppImage را اول باید با
+  `chmod +x IranNANternet_*.AppImage` اجرایی کنید.
+
+اگر ترجیح می‌دهید خودتان بیلد کنید، ادامه را بخوانید.
+
 ## پیش‌نیازها
 
 - Node نسخه ۲۰ یا بالاتر

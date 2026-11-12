@@ -2,6 +2,27 @@
 
 # Getting Started
 
+## Installing
+
+Ready-made bundles for macOS (Apple Silicon and Intel), Windows and Linux are attached to every
+[release](https://github.com/drstreet/nanternet/releases). They are not code-signed yet, so each
+platform asks for confirmation once, before the first launch:
+
+- **macOS** says the app is damaged or comes from an unidentified developer. Drag it into
+  Applications, then clear the quarantine flag:
+
+  ```sh
+  xattr -cr /Applications/IranNANternet.app
+  ```
+
+  Alternatively, try to open it once, then go to System Settings → Privacy & Security and choose
+  Open Anyway.
+- **Windows** SmartScreen shows "Windows protected your PC". Choose More info, then Run anyway.
+- **Linux** needs nothing extra for the `.deb` and `.rpm` packages. An AppImage has to be marked
+  executable first with `chmod +x IranNANternet_*.AppImage`.
+
+If you would rather build it yourself, read on.
+
 ## Requirements
 
 - Node 20 or newer

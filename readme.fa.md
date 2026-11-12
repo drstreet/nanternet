@@ -124,6 +124,26 @@ JSON. نمای باز هر مورد، ۲۴ ساعت گذشته و درصد دس�
 رمز SSH، عبارت عبور کلید و توکن ربات تلگرام هرگز به آن فایل نمی‌روند. این‌ها در انبار اعتبارنامه
 سیستم‌عامل ذخیره می‌شوند: Keychain روی مک، Credential Manager روی ویندوز و Secret Service روی لینوکس.
 
+## نصب
+
+بسته‌های آماده برای مک (Apple Silicon و Intel)، ویندوز و لینوکس به هر
+[ریلیز](https://github.com/drstreet/nanternet/releases) پیوست می‌شوند. این بسته‌ها هنوز امضای کد
+ندارند، برای همین هر سیستم‌عامل پیش از اولین اجرا یک بار تأیید می‌خواهد:
+
+- **مک** می‌گوید برنامه آسیب دیده یا از توسعه‌دهنده ناشناس است. برنامه را به Applications بکشید و
+  بعد پرچم قرنطینه را پاک کنید:
+
+  ```sh
+  xattr -cr /Applications/IranNANternet.app
+  ```
+
+  راه دیگر این است که یک بار بازش کنید، بعد به System Settings → Privacy & Security بروید و
+  Open Anyway را بزنید.
+- **ویندوز** پیام SmartScreen با عنوان «Windows protected your PC» نشان می‌دهد. More info و بعد
+  Run anyway را بزنید.
+- **لینوکس** برای بسته‌های `.deb` و `.rpm` کار اضافه‌ای لازم ندارد. فایل AppImage را اول باید با
+  `chmod +x IranNANternet_*.AppImage` اجرایی کنید.
+
 ## اجرا
 
 به Node نسخه ۲۰ یا بالاتر، یک تول‌چین Rust و
