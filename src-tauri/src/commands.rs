@@ -279,6 +279,15 @@ fn describe_endpoint(target: &Target) -> Result<()> {
                 Some(_) => Ok(()),
                 None => Err(Error::msg("that website address has no host")),
             }),
+        TargetSpec::Port(spec) => {
+            if spec.host.is_empty() || spec.host.contains(char::is_whitespace) {
+                Err(Error::msg("a port check needs a hostname or IP address"))
+            } else if spec.port == 0 {
+                Err(Error::msg("a port check needs a port between 1 and 65535"))
+            } else {
+                Ok(())
+            }
+        }
         TargetSpec::Server(spec) => {
             if spec.host.is_empty() {
                 Err(Error::msg("a server needs a hostname or IP address"))

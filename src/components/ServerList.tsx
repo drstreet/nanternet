@@ -109,6 +109,7 @@ export function ServerList({
                 <History id={target.id} checkedAt={status?.checkedAt} />
 
                 {status?.website ? <WebsiteDetail report={status.website} /> : null}
+                {status?.port ? <WebsiteDetail report={status.port} /> : null}
                 {status?.dns ? <DnsDetail report={status.dns} /> : null}
                 {status?.server ? <ServerDetail report={status.server} /> : null}
                 {status?.domain ? <DomainDetail report={status.domain} /> : null}
@@ -245,9 +246,11 @@ function WebsiteDetail({ report }: { report: WebsiteReport }) {
       <section>
         <h4 className="label">{t("status.localNetwork")}</h4>
         <p className="font-mono text-sm text-ink">
-          {report.local.reachable
-            ? `HTTP ${report.local.status ?? "?"} · ${report.local.latencyMs ?? "?"} ms`
-            : (report.local.error ?? t("status.unreachable"))}
+          {!report.local.reachable
+            ? (report.local.error ?? t("status.unreachable"))
+            : report.local.status !== null
+              ? `HTTP ${report.local.status} · ${report.local.latencyMs ?? "?"} ms`
+              : `${t("status.connected")} · ${report.local.latencyMs ?? "?"} ms`}
         </p>
       </section>
 
@@ -307,7 +310,7 @@ function NodeGroup({ title, nodes }: { title: string; nodes: NodeResult[] }) {
             {node.reachable === null
               ? t("status.pendingNode")
               : node.reachable
-                ? `${node.status ?? "ok"} · ${node.latencyMs ?? "?"} ms`
+                ? `${node.status ?? t("status.connected")} · ${node.latencyMs ?? "?"} ms`
                 : (node.message ?? t("status.unreachable"))}
           </span>
         </li>
@@ -486,6 +489,10 @@ function endpointOf(target: TargetView): string {
   switch (target.spec.kind) {
     case "website":
       return target.spec.url;
+    case "port":
+      return target.spec.host.includes(":")
+        ? `[${target.spec.host}]:${target.spec.port}`
+        : `${target.spec.host}:${target.spec.port}`;
     case "server":
       return `${target.spec.username}@${target.spec.host}:${target.spec.port}`;
     case "domain":

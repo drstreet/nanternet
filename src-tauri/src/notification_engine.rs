@@ -6,7 +6,7 @@ use crate::config::{ServerSpec, Settings, Target, TargetSpec};
 use crate::secrets;
 use crate::status::{
     DnsAttempt, DnsReport, DomainReport, Finding, Level, LocalProbe, NodeResult, ServerReport,
-    TargetStatus,
+    TargetStatus, WebsiteReport,
 };
 
 const DISCORD_LIMIT: usize = 1900;
@@ -355,6 +355,7 @@ impl Telegram {
 fn subject(spec: &TargetSpec) -> String {
     match spec {
         TargetSpec::Website(spec) => spec.url.clone(),
+        TargetSpec::Port(spec) => spec.address(),
         TargetSpec::Server(spec) => format!("{}:{}", spec.host, spec.port),
         TargetSpec::Domain(spec) => spec.domain.clone(),
     }
@@ -362,7 +363,12 @@ fn subject(spec: &TargetSpec) -> String {
 
 fn rows(spec: &TargetSpec, status: &TargetStatus) -> Vec<Vec<String>> {
     match spec {
-        TargetSpec::Website(_) => website_rows(status),
+        TargetSpec::Website(_) => {
+            let mut table = status.website.as_ref().map(reach_rows).unwrap_or_default();
+            table.extend(dns_rows(status.dns.as_ref()));
+            table
+        }
+        TargetSpec::Port(_) => status.port.as_ref().map(reach_rows).unwrap_or_default(),
         TargetSpec::Server(spec) => status
             .server
             .as_ref()
@@ -376,10 +382,7 @@ fn rows(spec: &TargetSpec, status: &TargetStatus) -> Vec<Vec<String>> {
     }
 }
 
-fn website_rows(status: &TargetStatus) -> Vec<Vec<String>> {
-    let Some(report) = &status.website else {
-        return Vec::new();
-    };
+fn reach_rows(report: &WebsiteReport) -> Vec<Vec<String>> {
     let mut rows = vec![cells(["ORIGIN", "VANTAGE POINT", "PING", "RESULT"])];
 
     let local = &report.local;
@@ -390,6 +393,7 @@ fn website_rows(status: &TargetStatus) -> Vec<Vec<String>> {
         match (local.status, &local.error) {
             (Some(code), _) => code.to_string(),
             (None, Some(error)) => error.clone(),
+            (None, None) if local.reachable => "connected".to_owned(),
             (None, None) => "no response".to_owned(),
         },
     ]);
@@ -408,12 +412,12 @@ fn website_rows(status: &TargetStatus) -> Vec<Vec<String>> {
                 (Some(code), _, _) => code.clone(),
                 (None, Some(message), _) => message.clone(),
                 (None, None, None) => "still running".to_owned(),
+                (None, None, Some(true)) => "connected".to_owned(),
                 (None, None, _) => "no answer".to_owned(),
             },
         ]);
     }
 
-    rows.extend(dns_rows(status.dns.as_ref()));
     rows
 }
 
@@ -796,6 +800,14 @@ pub fn headline(code: &str, language: &str) -> &'static str {
             "website.dnsBypass" => "با تغییر دی‌ان‌اس باز می‌شود",
             "website.dnsUnavailable" => "هیچ دی‌ان‌اسی جواب نداد",
             "website.healthy" => "سایت سالم است",
+            "port.iranAccess" => "پورت ایران‌اکسس شده است",
+            "port.blockedLocally" => "پورت از این شبکه مسدود است",
+            "port.blockedInsideIran" => "پورت از داخل ایران قابل دسترسی نیست",
+            "port.down" => "پورت بسته است یا جواب نمی‌دهد",
+            "port.ispPartial" => "بعضی اپراتورهای ایران به پورت نمی‌رسند",
+            "port.abroadPartial" => "بعضی نودهای خارج به پورت نمی‌رسند",
+            "port.externalProbeFailed" => "بررسی خارجی انجام نشد",
+            "port.healthy" => "پورت باز است",
             "server.unreachable" => "سرور پاسخ نمی‌دهد",
             "server.authenticationFailed" => "ورود SSH رد شد",
             "server.hostKeyMismatch" => "کلید میزبان تغییر کرده است",
@@ -840,6 +852,14 @@ pub fn headline(code: &str, language: &str) -> &'static str {
         "website.dnsBypass" => "Another resolver still reaches it",
         "website.dnsUnavailable" => "No resolver answered",
         "website.healthy" => "Site is healthy",
+        "port.iranAccess" => "Port is behind Iran-access isolation",
+        "port.blockedLocally" => "Port is blocked on this network",
+        "port.blockedInsideIran" => "Port is unreachable from inside Iran",
+        "port.down" => "Port is closed or not answering",
+        "port.ispPartial" => "Some Iranian ISPs cannot reach the port",
+        "port.abroadPartial" => "Some foreign vantage points cannot reach the port",
+        "port.externalProbeFailed" => "External probe unavailable",
+        "port.healthy" => "Port is open",
         "server.unreachable" => "Server is not answering",
         "server.authenticationFailed" => "SSH authentication rejected",
         "server.hostKeyMismatch" => "Host key changed",

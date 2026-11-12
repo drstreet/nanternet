@@ -22,6 +22,18 @@ export interface WebsiteSpec {
   abroadAlertThreshold: number;
 }
 
+export interface PortSpec {
+  kind: "port";
+  host: string;
+  port: number;
+  externalProbe: boolean;
+  externalIntervalSecs: number;
+  iranNodes: number;
+  abroadNodes: number;
+  iranAlertThreshold: number;
+  abroadAlertThreshold: number;
+}
+
 export type SshAuth = { method: "key"; path: string } | { method: "password" };
 
 export interface ServerSpec {
@@ -47,7 +59,7 @@ export interface DomainSpec {
   warnDays: number;
 }
 
-export type TargetSpec = WebsiteSpec | ServerSpec | DomainSpec;
+export type TargetSpec = WebsiteSpec | PortSpec | ServerSpec | DomainSpec;
 
 export type TargetKind = TargetSpec["kind"];
 
@@ -173,6 +185,7 @@ export interface TargetStatus {
   durationMs: number;
   findings: Finding[];
   website?: WebsiteReport;
+  port?: WebsiteReport;
   server?: ServerReport;
   domain?: DomainReport;
   dns?: DnsReport;

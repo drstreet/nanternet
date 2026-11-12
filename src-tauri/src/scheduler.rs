@@ -152,6 +152,34 @@ async fn examine(app: &AppHandle, target: &Target, slow: bool) -> TargetStatus {
             status.website = Some(report);
             status.seal(findings, started)
         }
+        TargetSpec::Port(spec) => {
+            let local = network_checker::probe_port_locally(spec).await;
+            let carried = state
+                .status_of(&target.id)
+                .await
+                .and_then(|previous| previous.port);
+            let mut external = carried.as_ref().and_then(|report| report.external.clone());
+            let mut external_error = carried.and_then(|report| report.external_error);
+
+            if spec.external_probe && slow {
+                match network_checker::probe_port_externally(&state.checkhost, spec).await {
+                    Ok(probe) => {
+                        external = Some(probe);
+                        external_error = None;
+                    }
+                    Err(err) => external_error = Some(err.to_string()),
+                }
+            }
+
+            let report = WebsiteReport {
+                local,
+                external: external.filter(|_| spec.external_probe),
+                external_error: external_error.filter(|_| spec.external_probe),
+            };
+            let findings = network_checker::classify_port(spec, &report);
+            status.port = Some(report);
+            status.seal(findings, started)
+        }
         TargetSpec::Server(spec) => {
             let secret = match secrets::read(&secrets::target_key(&target.id)).await {
                 Ok(secret) => secret,

@@ -26,6 +26,7 @@ interface Draft {
   abroadAlertThreshold: number;
   host: string;
   port: string;
+  tcpPort: string;
   username: string;
   authMethod: "key" | "password";
   keyPath: string;
@@ -59,6 +60,7 @@ const blank: Draft = {
   abroadAlertThreshold: 1,
   host: "",
   port: "22",
+  tcpPort: "443",
   username: "root",
   authMethod: "key",
   keyPath: "~/.ssh/id_ed25519",
@@ -95,6 +97,21 @@ function seed(target: TargetView | null): Draft {
       dnsProbe: spec.dnsProbe,
       expectedStatus: spec.expectedStatus ? String(spec.expectedStatus) : "",
       expectedBody: spec.expectedBody ?? "",
+      iranNodes: spec.iranNodes,
+      abroadNodes: spec.abroadNodes,
+      iranAlertThreshold: spec.iranAlertThreshold,
+      abroadAlertThreshold: spec.abroadAlertThreshold,
+    };
+  }
+
+  if (target.spec.kind === "port") {
+    const spec = target.spec;
+    return {
+      ...draft,
+      host: spec.host,
+      tcpPort: String(spec.port),
+      externalProbe: spec.externalProbe,
+      externalIntervalSecs: spec.externalIntervalSecs,
       iranNodes: spec.iranNodes,
       abroadNodes: spec.abroadNodes,
       iranAlertThreshold: spec.iranAlertThreshold,
@@ -148,6 +165,18 @@ function specOf(draft: Draft): TargetSpec {
         dnsProbe: draft.dnsProbe,
         expectedStatus: draft.expectedStatus ? number(draft.expectedStatus, 200) : null,
         expectedBody: draft.expectedBody.trim() || null,
+        iranNodes: draft.iranNodes,
+        abroadNodes: draft.abroadNodes,
+        iranAlertThreshold: Math.min(draft.iranAlertThreshold, draft.iranNodes),
+        abroadAlertThreshold: Math.min(draft.abroadAlertThreshold, draft.abroadNodes),
+      };
+    case "port":
+      return {
+        kind: "port",
+        host: draft.host,
+        port: number(draft.tcpPort, 443),
+        externalProbe: draft.externalProbe,
+        externalIntervalSecs: draft.externalIntervalSecs,
         iranNodes: draft.iranNodes,
         abroadNodes: draft.abroadNodes,
         iranAlertThreshold: Math.min(draft.iranAlertThreshold, draft.iranNodes),
@@ -261,8 +290,8 @@ export function AddServerModal({ target, onClose, onSubmit }: Props) {
           {!target ? (
             <fieldset>
               <legend className="label">{t("field.kind")}</legend>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {(["website", "server", "domain"] as const).map((kind) => (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(["website", "port", "server", "domain"] as const).map((kind) => (
                   <button
                     key={kind}
                     type="button"
@@ -370,121 +399,43 @@ export function AddServerModal({ target, onClose, onSubmit }: Props) {
                 hint={t("field.dnsProbe.hint")}
               />
 
-              <Toggle
-                checked={draft.externalProbe}
-                onChange={(value) => patch("externalProbe", value)}
-                label={t("field.externalProbe")}
-              />
+              <ExternalProbeFields draft={draft} patch={patch} />
+            </div>
+          ) : null}
 
-              {draft.externalProbe ? (
-                <>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div>
-                      <label className="label" htmlFor="target-external-interval">
-                        {t("field.externalInterval")}
-                      </label>
-                      <select
-                        id="target-external-interval"
-                        className="field"
-                        value={draft.externalIntervalSecs}
-                        onChange={(event) =>
-                          patch("externalIntervalSecs", Number(event.target.value))
-                        }
-                      >
-                        {EXTERNAL_INTERVALS.map((seconds) => (
-                          <option key={seconds} value={seconds}>
-                            {seconds < 3600
-                              ? t("time.minutes", { count: seconds / 60 })
-                              : t("time.hours", { count: seconds / 3600 })}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label" htmlFor="target-iran-nodes">
-                        {t("field.iranNodes")}
-                      </label>
-                      <select
-                        id="target-iran-nodes"
-                        className="field"
-                        value={draft.iranNodes}
-                        onChange={(event) => patch("iranNodes", Number(event.target.value))}
-                      >
-                        {[0, 1, 2, 3, 4, 5].map((count) => (
-                          <option key={count} value={count}>
-                            {count}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label" htmlFor="target-abroad-nodes">
-                        {t("field.abroadNodes")}
-                      </label>
-                      <select
-                        id="target-abroad-nodes"
-                        className="field"
-                        value={draft.abroadNodes}
-                        onChange={(event) => patch("abroadNodes", Number(event.target.value))}
-                      >
-                        {[1, 2, 3, 4, 5, 6].map((count) => (
-                          <option key={count} value={count}>
-                            {count}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <p className="hint sm:col-span-3">{t("field.nodes.hint")}</p>
-                  </div>
+          {draft.kind === "port" ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-[3fr_1fr]">
+                <div>
+                  <label className="label" htmlFor="target-tcp-host">
+                    {t("field.host")}
+                  </label>
+                  <input
+                    id="target-tcp-host"
+                    required
+                    className="field font-mono"
+                    placeholder="vpn.example.ir"
+                    value={draft.host}
+                    onChange={(event) => patch("host", event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="target-tcp-port">
+                    {t("field.port")}
+                  </label>
+                  <input
+                    id="target-tcp-port"
+                    required
+                    className="field font-mono"
+                    inputMode="numeric"
+                    value={draft.tcpPort}
+                    onChange={(event) => patch("tcpPort", event.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="hint">{t("field.tcp.hint")}</p>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="label" htmlFor="target-iran-threshold">
-                        {t("field.iranAlertThreshold")}
-                      </label>
-                      <select
-                        id="target-iran-threshold"
-                        className="field"
-                        disabled={draft.iranNodes === 0}
-                        value={Math.min(draft.iranAlertThreshold, draft.iranNodes)}
-                        onChange={(event) =>
-                          patch("iranAlertThreshold", Number(event.target.value))
-                        }
-                      >
-                        {thresholds(draft.iranNodes).map((count) => (
-                          <option key={count} value={count}>
-                            {count === 0
-                              ? t("field.alertThreshold.off")
-                              : t("field.alertThreshold.count", { count })}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label" htmlFor="target-abroad-threshold">
-                        {t("field.abroadAlertThreshold")}
-                      </label>
-                      <select
-                        id="target-abroad-threshold"
-                        className="field"
-                        value={Math.min(draft.abroadAlertThreshold, draft.abroadNodes)}
-                        onChange={(event) =>
-                          patch("abroadAlertThreshold", Number(event.target.value))
-                        }
-                      >
-                        {thresholds(draft.abroadNodes).map((count) => (
-                          <option key={count} value={count}>
-                            {count === 0
-                              ? t("field.alertThreshold.off")
-                              : t("field.alertThreshold.count", { count })}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <p className="hint sm:col-span-2">{t("field.alertThreshold.hint")}</p>
-                  </div>
-                </>
-              ) : null}
+              <ExternalProbeFields draft={draft} patch={patch} />
             </div>
           ) : null}
 
@@ -748,5 +699,134 @@ export function AddServerModal({ target, onClose, onSubmit }: Props) {
         </footer>
       </form>
     </div>
+  );
+}
+
+function ExternalProbeFields({
+  draft,
+  patch,
+}: {
+  draft: Draft;
+  patch: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <>
+      <Toggle
+        checked={draft.externalProbe}
+        onChange={(value) => patch("externalProbe", value)}
+        label={t("field.externalProbe")}
+      />
+
+      {draft.externalProbe ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="label" htmlFor="target-external-interval">
+                {t("field.externalInterval")}
+              </label>
+              <select
+                id="target-external-interval"
+                className="field"
+                value={draft.externalIntervalSecs}
+                onChange={(event) =>
+                  patch("externalIntervalSecs", Number(event.target.value))
+                }
+              >
+                {EXTERNAL_INTERVALS.map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    {seconds < 3600
+                      ? t("time.minutes", { count: seconds / 60 })
+                      : t("time.hours", { count: seconds / 3600 })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="target-iran-nodes">
+                {t("field.iranNodes")}
+              </label>
+              <select
+                id="target-iran-nodes"
+                className="field"
+                value={draft.iranNodes}
+                onChange={(event) => patch("iranNodes", Number(event.target.value))}
+              >
+                {[0, 1, 2, 3, 4, 5].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="target-abroad-nodes">
+                {t("field.abroadNodes")}
+              </label>
+              <select
+                id="target-abroad-nodes"
+                className="field"
+                value={draft.abroadNodes}
+                onChange={(event) => patch("abroadNodes", Number(event.target.value))}
+              >
+                {[1, 2, 3, 4, 5, 6].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="hint sm:col-span-3">{t("field.nodes.hint")}</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="target-iran-threshold">
+                {t("field.iranAlertThreshold")}
+              </label>
+              <select
+                id="target-iran-threshold"
+                className="field"
+                disabled={draft.iranNodes === 0}
+                value={Math.min(draft.iranAlertThreshold, draft.iranNodes)}
+                onChange={(event) =>
+                  patch("iranAlertThreshold", Number(event.target.value))
+                }
+              >
+                {thresholds(draft.iranNodes).map((count) => (
+                  <option key={count} value={count}>
+                    {count === 0
+                      ? t("field.alertThreshold.off")
+                      : t("field.alertThreshold.count", { count })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="target-abroad-threshold">
+                {t("field.abroadAlertThreshold")}
+              </label>
+              <select
+                id="target-abroad-threshold"
+                className="field"
+                value={Math.min(draft.abroadAlertThreshold, draft.abroadNodes)}
+                onChange={(event) =>
+                  patch("abroadAlertThreshold", Number(event.target.value))
+                }
+              >
+                {thresholds(draft.abroadNodes).map((count) => (
+                  <option key={count} value={count}>
+                    {count === 0
+                      ? t("field.alertThreshold.off")
+                      : t("field.alertThreshold.count", { count })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="hint sm:col-span-2">{t("field.alertThreshold.hint")}</p>
+          </div>
+        </>
+      ) : null}
+    </>
   );
 }

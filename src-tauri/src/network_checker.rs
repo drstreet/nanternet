@@ -1,7 +1,9 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+use tokio::net::TcpStream;
 
 use crate::checkhost::CheckHost;
-use crate::config::WebsiteSpec;
+use crate::config::{PortSpec, WebsiteSpec};
 use crate::status::{ExternalProbe, Finding, LocalProbe, NodeResult, WebsiteReport};
 
 pub async fn probe_locally(http: &reqwest::Client, spec: &WebsiteSpec) -> LocalProbe {
@@ -51,68 +53,62 @@ pub async fn probe_externally(
     })
 }
 
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub async fn probe_port_locally(spec: &PortSpec) -> LocalProbe {
+    let started = Instant::now();
+    let outcome = tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        TcpStream::connect((spec.host.as_str(), spec.port)),
+    )
+    .await;
+    let latency_ms = Some(started.elapsed().as_millis() as u64);
+    let error = match outcome {
+        Ok(Ok(_)) => None,
+        Ok(Err(err)) => Some(err.to_string()),
+        Err(_) => Some("connection timed out".to_owned()),
+    };
+    LocalProbe {
+        reachable: error.is_none(),
+        status: None,
+        latency_ms,
+        error,
+        content_match: None,
+    }
+}
+
+pub async fn probe_port_externally(
+    checkhost: &CheckHost,
+    spec: &PortSpec,
+) -> crate::error::Result<ExternalProbe> {
+    let nodes = checkhost.select(spec.iran_nodes, spec.abroad_nodes).await?;
+    let probe = checkhost.tcp_probe(&spec.address(), &nodes).await?;
+    Ok(ExternalProbe {
+        checked_at: crate::unix_now(),
+        permanent_link: probe.permanent_link,
+        nodes: probe.nodes,
+    })
+}
+
+pub fn classify_port(spec: &PortSpec, report: &WebsiteReport) -> Vec<Finding> {
+    let gates = Gates {
+        family: "port",
+        iran_threshold: spec.iran_alert_threshold,
+        abroad_threshold: spec.abroad_alert_threshold,
+    };
+    gates.judge(report, Vec::new(), || match report.local.latency_ms {
+        Some(ms) => format!("port {} accepted a connection in {ms} ms", spec.port),
+        None => format!("port {} accepted a connection", spec.port),
+    })
+}
+
 pub fn classify(spec: &WebsiteSpec, report: &WebsiteReport) -> Vec<Finding> {
     let local = &report.local;
-    let nodes: &[NodeResult] = report
-        .external
-        .as_ref()
-        .map(|probe| probe.nodes.as_slice())
-        .unwrap_or_default();
-
-    let inside = Tally::of(nodes.iter().filter(|node| node.inside_iran()));
-    let outside = Tally::of(nodes.iter().filter(|node| !node.inside_iran()));
-
-    if local.reachable && outside.answered > 0 && outside.reachable == 0 {
-        return vec![Finding::critical(
-            "website.iranAccess",
-            format!(
-                "reachable from this network but not from {} outside vantage point(s): {}",
-                outside.answered,
-                outside.failures.join(", ")
-            ),
-        )];
-    }
-
-    if !local.reachable && outside.reachable > 0 {
-        return vec![Finding::critical(
-            "website.blockedLocally",
-            format!(
-                "{} of {} outside vantage points succeeded while this network failed: {}",
-                outside.reachable,
-                outside.answered,
-                local.error.clone().unwrap_or_else(|| "no response".into())
-            ),
-        )];
-    }
-
-    if outside.reachable > 0 && inside.answered > 0 && inside.reachable == 0 {
-        return vec![Finding::critical(
-            "website.blockedInsideIran",
-            format!(
-                "reachable from abroad but every Iranian vantage point failed: {}",
-                inside.failures.join(", ")
-            ),
-        )];
-    }
-
-    if !local.reachable {
-        let detail = local
-            .error
-            .clone()
-            .unwrap_or_else(|| "no response from this network".into());
-        return vec![Finding::critical(
-            "website.down",
-            if outside.answered > 0 {
-                format!(
-                    "{detail}; all {} outside vantage points also failed",
-                    outside.answered
-                )
-            } else {
-                detail
-            },
-        )];
-    }
-
+    let gates = Gates {
+        family: "website",
+        iran_threshold: spec.iran_alert_threshold,
+        abroad_threshold: spec.abroad_alert_threshold,
+    };
     let mut findings = Vec::new();
 
     if let Some(expected) = spec.expected_status {
@@ -148,45 +144,127 @@ pub fn classify(spec: &WebsiteSpec, report: &WebsiteReport) -> Vec<Finding> {
         ));
     }
 
-    if breached(inside.failed(), spec.iran_alert_threshold) {
-        findings.push(Finding::warn(
-            "website.ispPartial",
-            format!(
-                "{} of {} Iranian vantage points failed: {}",
-                inside.failed(),
-                inside.answered,
-                inside.failures.join(", ")
-            ),
-        ));
+    gates.judge(report, findings, || match local.latency_ms {
+        Some(ms) => format!("HTTP {} in {ms} ms", local.status.unwrap_or_default()),
+        None => format!("HTTP {}", local.status.unwrap_or_default()),
+    })
+}
+
+struct Gates {
+    family: &'static str,
+    iran_threshold: usize,
+    abroad_threshold: usize,
+}
+
+impl Gates {
+    fn code(&self, name: &str) -> String {
+        format!("{}.{name}", self.family)
     }
 
-    if breached(outside.failed(), spec.abroad_alert_threshold) {
-        findings.push(Finding::warn(
-            "website.abroadPartial",
-            format!(
-                "{} of {} outside vantage points failed: {}",
-                outside.failed(),
-                outside.answered,
-                outside.failures.join(", ")
-            ),
-        ));
-    }
+    fn judge(
+        &self,
+        report: &WebsiteReport,
+        mut findings: Vec<Finding>,
+        healthy: impl FnOnce() -> String,
+    ) -> Vec<Finding> {
+        let local = &report.local;
+        let nodes: &[NodeResult] = report
+            .external
+            .as_ref()
+            .map(|probe| probe.nodes.as_slice())
+            .unwrap_or_default();
 
-    if let Some(error) = &report.external_error {
-        findings.push(Finding::warn("website.externalProbeFailed", error.clone()));
-    }
+        let inside = Tally::of(nodes.iter().filter(|node| node.inside_iran()));
+        let outside = Tally::of(nodes.iter().filter(|node| !node.inside_iran()));
 
-    if findings.is_empty() {
-        findings.push(Finding::ok(
-            "website.healthy",
-            match local.latency_ms {
-                Some(ms) => format!("HTTP {} in {ms} ms", local.status.unwrap_or_default()),
-                None => format!("HTTP {}", local.status.unwrap_or_default()),
-            },
-        ));
-    }
+        if local.reachable && outside.answered > 0 && outside.reachable == 0 {
+            return vec![Finding::critical(
+                &self.code("iranAccess"),
+                format!(
+                    "reachable from this network but not from {} outside vantage point(s): {}",
+                    outside.answered,
+                    outside.failures.join(", ")
+                ),
+            )];
+        }
 
-    findings
+        if !local.reachable && outside.reachable > 0 {
+            return vec![Finding::critical(
+                &self.code("blockedLocally"),
+                format!(
+                    "{} of {} outside vantage points succeeded while this network failed: {}",
+                    outside.reachable,
+                    outside.answered,
+                    local.error.clone().unwrap_or_else(|| "no response".into())
+                ),
+            )];
+        }
+
+        if outside.reachable > 0 && inside.answered > 0 && inside.reachable == 0 {
+            return vec![Finding::critical(
+                &self.code("blockedInsideIran"),
+                format!(
+                    "reachable from abroad but every Iranian vantage point failed: {}",
+                    inside.failures.join(", ")
+                ),
+            )];
+        }
+
+        if !local.reachable {
+            let detail = local
+                .error
+                .clone()
+                .unwrap_or_else(|| "no response from this network".into());
+            return vec![Finding::critical(
+                &self.code("down"),
+                if outside.answered > 0 {
+                    format!(
+                        "{detail}; all {} outside vantage points also failed",
+                        outside.answered
+                    )
+                } else {
+                    detail
+                },
+            )];
+        }
+
+        if breached(inside.failed(), self.iran_threshold) {
+            findings.push(Finding::warn(
+                &self.code("ispPartial"),
+                format!(
+                    "{} of {} Iranian vantage points failed: {}",
+                    inside.failed(),
+                    inside.answered,
+                    inside.failures.join(", ")
+                ),
+            ));
+        }
+
+        if breached(outside.failed(), self.abroad_threshold) {
+            findings.push(Finding::warn(
+                &self.code("abroadPartial"),
+                format!(
+                    "{} of {} outside vantage points failed: {}",
+                    outside.failed(),
+                    outside.answered,
+                    outside.failures.join(", ")
+                ),
+            ));
+        }
+
+        if let Some(error) = &report.external_error {
+            findings.push(Finding::warn(
+                &self.code("externalProbeFailed"),
+                error.clone(),
+            ));
+        }
+
+        if findings.is_empty() {
+            findings.push(Finding::ok(&self.code("healthy"), healthy()));
+        }
+
+        findings
+    }
 }
 
 fn breached(failed: usize, threshold: usize) -> bool {
@@ -304,6 +382,67 @@ mod tests {
             }),
             external_error: None,
         }
+    }
+
+    fn port_spec() -> PortSpec {
+        PortSpec {
+            host: "vpn.example.ir".into(),
+            port: 443,
+            external_probe: true,
+            external_interval_secs: 900,
+            iran_nodes: 3,
+            abroad_nodes: 4,
+            iran_alert_threshold: 1,
+            abroad_alert_threshold: 1,
+        }
+    }
+
+    fn open_port() -> LocalProbe {
+        LocalProbe {
+            status: None,
+            ..local(true)
+        }
+    }
+
+    #[test]
+    fn a_port_gets_the_same_verdicts_under_its_own_codes() {
+        let spec = port_spec();
+        let isolated = classify_port(&spec, &report(open_port(), vec![node("de", Some(false))]));
+        assert_eq!(isolated[0].code, "port.iranAccess");
+
+        let filtered = classify_port(
+            &spec,
+            &report(
+                open_port(),
+                vec![node("de", Some(true)), node("ir", Some(false))],
+            ),
+        );
+        assert_eq!(filtered[0].code, "port.blockedInsideIran");
+
+        let closed = classify_port(&spec, &report(local(false), vec![node("de", Some(false))]));
+        assert_eq!(closed[0].code, "port.down");
+    }
+
+    #[test]
+    fn an_open_port_is_healthy_without_any_http_status() {
+        let findings = classify_port(
+            &port_spec(),
+            &report(
+                open_port(),
+                vec![node("de", Some(true)), node("ir", Some(true))],
+            ),
+        );
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "port.healthy");
+        assert!(findings[0].detail.contains("443"));
+    }
+
+    #[test]
+    fn an_ipv6_host_is_bracketed_for_check_host() {
+        let mut spec = port_spec();
+        spec.host = "2001:db8::1".into();
+        assert_eq!(spec.address(), "[2001:db8::1]:443");
+        assert_eq!(port_spec().address(), "vpn.example.ir:443");
     }
 
     #[test]

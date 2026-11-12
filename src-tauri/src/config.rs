@@ -117,6 +117,35 @@ pub struct WebsiteSpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortSpec {
+    pub host: String,
+    pub port: u16,
+    #[serde(default = "enabled")]
+    pub external_probe: bool,
+    #[serde(default = "default_external_interval")]
+    pub external_interval_secs: u64,
+    #[serde(default = "default_iran_nodes")]
+    pub iran_nodes: usize,
+    #[serde(default = "default_abroad_nodes")]
+    pub abroad_nodes: usize,
+    #[serde(default = "default_alert_threshold")]
+    pub iran_alert_threshold: usize,
+    #[serde(default = "default_alert_threshold")]
+    pub abroad_alert_threshold: usize,
+}
+
+impl PortSpec {
+    pub fn address(&self) -> String {
+        if self.host.contains(':') {
+            format!("[{}]:{}", self.host, self.port)
+        } else {
+            format!("{}:{}", self.host, self.port)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "camelCase")]
 pub enum SshAuth {
     #[serde(rename_all = "camelCase")]
@@ -166,6 +195,7 @@ pub struct DomainSpec {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TargetSpec {
     Website(WebsiteSpec),
+    Port(PortSpec),
     Server(ServerSpec),
     Domain(DomainSpec),
 }
@@ -214,6 +244,23 @@ impl Target {
                     }
                 }
             }
+            TargetSpec::Port(spec) => {
+                spec.host = spec
+                    .host
+                    .trim()
+                    .trim_start_matches('[')
+                    .trim_end_matches(']')
+                    .to_owned();
+                spec.external_interval_secs = spec
+                    .external_interval_secs
+                    .max(MIN_EXTERNAL_INTERVAL)
+                    .max(self.interval_secs);
+                spec.iran_nodes = spec.iran_nodes.min(MAX_PROBE_NODES);
+                spec.abroad_nodes = spec.abroad_nodes.min(MAX_PROBE_NODES);
+                spec.iran_alert_threshold = spec.iran_alert_threshold.min(spec.iran_nodes.max(1));
+                spec.abroad_alert_threshold =
+                    spec.abroad_alert_threshold.min(spec.abroad_nodes.max(1));
+            }
             TargetSpec::Server(spec) => {
                 spec.host = spec.host.trim().to_owned();
                 spec.username = spec.username.trim().to_owned();
@@ -246,6 +293,7 @@ impl Target {
             TargetSpec::Website(spec) if spec.external_probe || spec.dns_probe => {
                 Some(spec.external_interval_secs)
             }
+            TargetSpec::Port(spec) if spec.external_probe => Some(spec.external_interval_secs),
             TargetSpec::Domain(spec) if spec.check_registration => Some(REGISTRATION_INTERVAL),
             _ => None,
         }

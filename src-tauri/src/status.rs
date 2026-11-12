@@ -60,6 +60,8 @@ pub struct TargetStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub website: Option<WebsiteReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<WebsiteReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<ServerReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<DomainReport>,
@@ -76,6 +78,7 @@ impl TargetStatus {
             duration_ms: 0,
             findings: Vec::new(),
             website: None,
+            port: None,
             server: None,
             domain: None,
             dns: None,

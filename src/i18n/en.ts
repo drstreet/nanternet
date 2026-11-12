@@ -30,9 +30,11 @@ export const en = {
   "list.paused": "Paused",
 
   "kind.website": "Website",
+  "kind.port": "TCP port",
   "kind.server": "Server",
   "kind.domain": "Domain",
   "kind.website.hint": "Compares your own network against vantage points inside and outside Iran.",
+  "kind.port.hint": "Opens a TCP connection from here, from Iran and from abroad. For VPN inbounds, databases, mail and anything that is not a web page.",
   "kind.server.hint": "Connects over SSH to read load, memory, disk and container health.",
   "kind.domain.hint": "Watches TLS certificate and domain registration expiry.",
 
@@ -69,6 +71,8 @@ export const en = {
     "Only partial failures are gated here. Losing every node on one side of the border, or everywhere at once, always alerts.",
   "field.host": "Host or IP",
   "field.port": "Port",
+  "field.tcp.hint":
+    "Only the TCP handshake is checked, nothing is sent. An open port with a broken service behind it still counts as open.",
   "field.username": "SSH user",
   "field.auth": "Authentication",
   "field.keyPath": "Private key path",
@@ -107,6 +111,7 @@ export const en = {
 
   "status.lastChecked": "Checked {ago}",
   "status.never": "not checked yet",
+  "status.connected": "connected",
   "status.took": "took {ms} ms",
   "status.localNetwork": "Your network",
   "status.external": "Outside vantage points",
@@ -200,6 +205,14 @@ export const en = {
   "finding.website.dnsBypass": "Another resolver still reaches it",
   "finding.website.dnsUnavailable": "No resolver answered",
   "finding.website.healthy": "Site is healthy",
+  "finding.port.iranAccess": "Port is behind Iran-access isolation",
+  "finding.port.blockedLocally": "Port is blocked on this network",
+  "finding.port.blockedInsideIran": "Port is unreachable from inside Iran",
+  "finding.port.down": "Port is closed or not answering",
+  "finding.port.ispPartial": "Some Iranian ISPs cannot reach the port",
+  "finding.port.abroadPartial": "Some foreign vantage points cannot reach the port",
+  "finding.port.externalProbeFailed": "External probe unavailable",
+  "finding.port.healthy": "Port is open",
   "finding.server.unreachable": "Server is not answering",
   "finding.server.authenticationFailed": "SSH authentication rejected",
   "finding.server.hostKeyMismatch": "Host key changed",

@@ -32,9 +32,11 @@ export const fa: Dictionary = {
   "list.paused": "متوقف",
 
   "kind.website": "وب‌سایت",
+  "kind.port": "پورت TCP",
   "kind.server": "سرور",
   "kind.domain": "دامنه",
   "kind.website.hint": "شبکه خودتان را با نودهای داخل و خارج ایران مقایسه می‌کند.",
+  "kind.port.hint": "از همین‌جا، از داخل ایران و از خارج یک اتصال TCP باز می‌کند. برای اینباند VPN، دیتابیس، ایمیل و هر چیزی که صفحه وب نیست.",
   "kind.server.hint": "با SSH وصل می‌شود و بار، حافظه، دیسک و سلامت کانتینرها را می‌خواند.",
   "kind.domain.hint": "انقضای گواهی TLS و ثبت دامنه را پایش می‌کند.",
 
@@ -71,6 +73,8 @@ export const fa: Dictionary = {
     "این تنظیم فقط قطعی جزئی را کنترل می‌کند. اگر همه نودهای یک طرف مرز یا همه‌جا با هم قطع شوند، همیشه هشدار داده می‌شود.",
   "field.host": "هاست یا آی‌پی",
   "field.port": "پورت",
+  "field.tcp.hint":
+    "فقط دست‌دهی TCP بررسی می‌شود و چیزی فرستاده نمی‌شود. پورتی که باز است ولی سرویس پشتش خراب است، باز حساب می‌شود.",
   "field.username": "کاربر SSH",
   "field.auth": "روش ورود",
   "field.keyPath": "مسیر کلید خصوصی",
@@ -109,6 +113,7 @@ export const fa: Dictionary = {
 
   "status.lastChecked": "بررسی {ago}",
   "status.never": "هنوز بررسی نشده",
+  "status.connected": "وصل شد",
   "status.took": "{ms} میلی‌ثانیه",
   "status.localNetwork": "شبکه شما",
   "status.external": "نودهای بیرونی",
@@ -202,6 +207,14 @@ export const fa: Dictionary = {
   "finding.website.dnsBypass": "با تغییر دی‌ان‌اس باز می‌شود",
   "finding.website.dnsUnavailable": "هیچ دی‌ان‌اسی جواب نداد",
   "finding.website.healthy": "سایت سالم است",
+  "finding.port.iranAccess": "پورت ایران‌اکسس شده است",
+  "finding.port.blockedLocally": "پورت از این شبکه مسدود است",
+  "finding.port.blockedInsideIran": "پورت از داخل ایران قابل دسترسی نیست",
+  "finding.port.down": "پورت بسته است یا جواب نمی‌دهد",
+  "finding.port.ispPartial": "بعضی اپراتورهای ایران به پورت نمی‌رسند",
+  "finding.port.abroadPartial": "بعضی نودهای خارج به پورت نمی‌رسند",
+  "finding.port.externalProbeFailed": "بررسی خارجی انجام نشد",
+  "finding.port.healthy": "پورت باز است",
   "finding.server.unreachable": "سرور پاسخ نمی‌دهد",
   "finding.server.authenticationFailed": "ورود SSH رد شد",
   "finding.server.hostKeyMismatch": "کلید میزبان تغییر کرده است",
