@@ -71,6 +71,7 @@ export interface Target {
   enabled: boolean;
   intervalSecs: number;
   alerts: AlertLevel | null;
+  snoozedUntil: number | null;
   spec: TargetSpec;
 }
 
@@ -203,6 +204,7 @@ export interface Settings {
   dnsResolvers: string[];
   confirmations: number;
   startAtLogin: boolean;
+  snoozedUntil: number | null;
 }
 
 export interface SettingsView extends Settings {

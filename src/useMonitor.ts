@@ -42,8 +42,10 @@ export function useMonitor() {
     const subscription = api.onStatus((status) =>
       setStatuses((current) => ({ ...current, [status.targetId]: status })),
     );
+    const settingsSubscription = api.onSettingsChanged(() => void reload());
     return () => {
       void subscription.then((unlisten) => unlisten());
+      void settingsSubscription.then((unlisten) => unlisten());
     };
   }, [reload]);
 
@@ -76,6 +78,24 @@ export function useMonitor() {
         current.map((target) => (target.id === id ? { ...target, enabled } : target)),
       );
       if ((await attempt(() => api.setTargetEnabled(id, enabled))) === FAILED) await reload();
+    },
+    [attempt, reload],
+  );
+
+  const snooze = useCallback(
+    async (id: string, until: number | null) => {
+      setTargets((current) =>
+        current.map((target) => (target.id === id ? { ...target, snoozedUntil: until } : target)),
+      );
+      if ((await attempt(() => api.snoozeTarget(id, until))) === FAILED) await reload();
+    },
+    [attempt, reload],
+  );
+
+  const silence = useCallback(
+    async (until: number | null) => {
+      if ((await attempt(() => api.snoozeAlerts(until))) === FAILED) return;
+      await reload();
     },
     [attempt, reload],
   );
@@ -116,6 +136,8 @@ export function useMonitor() {
     save,
     remove,
     toggle,
+    snooze,
+    silence,
     check,
     checkAll,
     updateSettings,

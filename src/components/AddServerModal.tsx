@@ -253,6 +253,7 @@ export function AddServerModal({ target, onClose, onSubmit }: Props) {
           enabled: draft.enabled,
           intervalSecs: draft.intervalSecs,
           alerts: draft.alerts === "inherit" ? null : draft.alerts,
+          snoozedUntil: target?.snoozedUntil ?? null,
           spec,
         },
         secret.length > 0 ? secret : undefined,

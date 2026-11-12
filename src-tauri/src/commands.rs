@@ -70,7 +70,13 @@ pub async fn save_target(
                 .iter_mut()
                 .find(|candidate| candidate.id == stored.id)
             {
-                Some(existing) => *existing = stored,
+                Some(existing) => {
+                    let snoozed_until = existing.snoozed_until;
+                    *existing = Target {
+                        snoozed_until,
+                        ..stored
+                    }
+                }
                 None => store.targets.push(stored),
             }
             Ok(())
@@ -113,6 +119,30 @@ pub async fn set_target_enabled(
             },
         )
         .await
+}
+
+#[tauri::command]
+pub async fn snooze_target(
+    state: State<'_, AppState>,
+    id: String,
+    until: Option<i64>,
+) -> Result<()> {
+    state
+        .mutate(
+            move |store| match store.targets.iter_mut().find(|target| target.id == id) {
+                Some(target) => {
+                    target.snoozed_until = until;
+                    Ok(())
+                }
+                None => Err(Error::msg("that target no longer exists")),
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn snooze_alerts(app: AppHandle, until: Option<i64>) -> Result<()> {
+    crate::tray::silence(&app, until).await
 }
 
 #[tauri::command]
@@ -174,9 +204,10 @@ pub async fn save_settings(
             .map_err(|err| Error::msg(format!("could not remove the login item: {err}")))?;
     }
 
-    let stored = settings.clone();
+    let mut stored = settings.clone();
     state
         .mutate(move |store| {
+            stored.snoozed_until = store.settings.snoozed_until;
             store.settings = stored;
             Ok(())
         })

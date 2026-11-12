@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::config::{Target, TargetSpec};
+use crate::config::{snoozed, Target, TargetSpec};
 use crate::error::Result;
 use crate::notification_engine::{self, Alert};
 use crate::state::AppState;
@@ -95,7 +95,10 @@ pub async fn visit(app: AppHandle, target: Target, slow: bool) -> Result<TargetS
 
     let settings = state.settings().await;
     let rule = target.alerts.unwrap_or(settings.alerts);
-    if state.announce(&status, settings.confirmations).await && rule.allows(status.level) {
+    let now = crate::unix_now();
+    let quiet = snoozed(settings.snoozed_until, now) || snoozed(target.snoozed_until, now);
+    if !quiet && state.announce(&status, settings.confirmations).await && rule.allows(status.level)
+    {
         let alert = Alert::of(&target, &status);
         notification_engine::dispatch(&app, &settings, &alert).await;
     }

@@ -212,7 +212,13 @@ pub struct Target {
     pub interval_secs: u64,
     #[serde(default)]
     pub alerts: Option<AlertLevel>,
+    #[serde(default)]
+    pub snoozed_until: Option<i64>,
     pub spec: TargetSpec,
+}
+
+pub fn snoozed(until: Option<i64>, now: i64) -> bool {
+    until.is_some_and(|until| until > now)
 }
 
 impl Target {
@@ -327,6 +333,8 @@ pub struct Settings {
     pub confirmations: u32,
     #[serde(default)]
     pub start_at_login: bool,
+    #[serde(default)]
+    pub snoozed_until: Option<i64>,
 }
 
 impl Default for Settings {
@@ -344,6 +352,7 @@ impl Default for Settings {
             dns_resolvers: Vec::new(),
             confirmations: default_confirmations(),
             start_at_login: false,
+            snoozed_until: None,
         }
     }
 }
@@ -463,6 +472,13 @@ mod tests {
 
         let written = serde_json::to_string(&store.settings).unwrap();
         assert!(!written.contains("telegramChatId\""));
+    }
+
+    #[test]
+    fn a_snooze_only_holds_until_its_deadline() {
+        assert!(!snoozed(None, 100));
+        assert!(!snoozed(Some(100), 100));
+        assert!(snoozed(Some(101), 100));
     }
 
     #[test]

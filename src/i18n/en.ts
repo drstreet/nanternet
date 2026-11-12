@@ -104,6 +104,13 @@ export const en = {
   "update.later": "Later",
   "update.failed": "The update could not be installed: {reason}",
 
+  "snooze.pick": "Silence alerts for…",
+  "snooze.tag": "silenced",
+  "snooze.until": "Silenced until {time}",
+  "snooze.resume": "Resume alerts",
+  "snooze.allHour": "Silence everything for 1 hour",
+  "snooze.allUntil": "Alerts are silenced until {time}. Checks keep running and history keeps recording.",
+
   "history.title": "Last 24 hours",
   "history.uptime": "Uptime {day} over 24 h · {week} over 7 days",
   "history.dayAgo": "24 h ago",

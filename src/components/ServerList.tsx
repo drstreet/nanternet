@@ -36,7 +36,10 @@ interface Props {
   onDelete: (target: TargetView) => void;
   onToggle: (target: TargetView) => void;
   onCheck: (target: TargetView) => void;
+  onSnooze: (target: TargetView, until: number | null) => void;
 }
+
+const SNOOZES = [3600, 4 * 3600, 24 * 3600];
 
 export function ServerList({
   targets,
@@ -46,8 +49,9 @@ export function ServerList({
   onDelete,
   onToggle,
   onCheck,
+  onSnooze,
 }: Props) {
-  const { t, relative } = useI18n();
+  const { t, relative, clock } = useI18n();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   if (targets.length === 0) {
@@ -65,6 +69,7 @@ export function ServerList({
         const status = statuses[target.id];
         const level = status?.level ?? "unknown";
         const open = expanded === target.id;
+        const snoozed = target.snoozedUntil !== null && target.snoozedUntil > Date.now() / 1000;
 
         return (
           <li key={target.id} className="card overflow-hidden">
@@ -81,6 +86,9 @@ export function ServerList({
                     <KindTag kind={target.spec.kind} />
                     {!target.enabled ? (
                       <span className="text-xs text-ink-faint">{t("list.paused")}</span>
+                    ) : null}
+                    {target.enabled && snoozed ? (
+                      <span className="text-xs text-caution">{t("snooze.tag")}</span>
                     ) : null}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-xs text-ink-faint">
@@ -119,7 +127,36 @@ export function ServerList({
                     {status ? <Freshness status={status} /> : t("status.never")} ·{" "}
                     {interval(target.intervalSecs)}
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {snoozed && target.snoozedUntil !== null ? (
+                      <>
+                        <span className="text-xs text-caution">
+                          {t("snooze.until", { time: clock(target.snoozedUntil) })}
+                        </span>
+                        <Button onClick={() => onSnooze(target, null)}>{t("snooze.resume")}</Button>
+                      </>
+                    ) : (
+                      <select
+                        className="field w-auto py-1.5 text-sm"
+                        value=""
+                        aria-label={t("snooze.pick")}
+                        onChange={(event) =>
+                          onSnooze(
+                            target,
+                            Math.floor(Date.now() / 1000) + Number(event.target.value),
+                          )
+                        }
+                      >
+                        <option value="" disabled>
+                          {t("snooze.pick")}
+                        </option>
+                        {SNOOZES.map((seconds) => (
+                          <option key={seconds} value={seconds}>
+                            {t("time.hours", { count: seconds / 3600 })}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <Button onClick={() => onToggle(target)}>
                       {target.enabled ? t("action.pause") : t("action.resume")}
                     </Button>

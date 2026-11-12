@@ -86,6 +86,9 @@ function Shell({ monitor }: { monitor: ReturnType<typeof useMonitor> }) {
             onToggle={(target) => void monitor.toggle(target.id, !target.enabled)}
             onCheck={(target) => void monitor.check(target.id)}
             onCheckAll={() => void monitor.checkAll()}
+            silencedUntil={monitor.settings?.snoozedUntil ?? null}
+            onSilence={(until) => void monitor.silence(until)}
+            onSnooze={(target, until) => void monitor.snooze(target.id, until)}
           />
         ) : monitor.settings ? (
           <Settings settings={monitor.settings} onSave={monitor.updateSettings} />

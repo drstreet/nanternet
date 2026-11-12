@@ -106,6 +106,13 @@ export const fa: Dictionary = {
   "update.later": "بعداً",
   "update.failed": "نصب به‌روزرسانی انجام نشد: {reason}",
 
+  "snooze.pick": "بی‌صدا کردن هشدار برای…",
+  "snooze.tag": "بی‌صدا",
+  "snooze.until": "بی‌صدا تا {time}",
+  "snooze.resume": "برگرداندن هشدارها",
+  "snooze.allHour": "بی‌صدا کردن همه برای ۱ ساعت",
+  "snooze.allUntil": "هشدارها تا {time} بی‌صدا هستند. بررسی‌ها ادامه دارند و تاریخچه ثبت می‌شود.",
+
   "history.title": "۲۴ ساعت گذشته",
   "history.uptime": "دسترس‌پذیری ۲۴ ساعت {day} · ۷ روز {week}",
   "history.dayAgo": "۲۴ ساعت پیش",

@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { BotTokens, Sample, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
 
 const STATUS_EVENT = "target://status";
+const SETTINGS_EVENT = "settings://changed";
 
 export const listTargets = () => invoke<TargetView[]>("list_targets");
 
@@ -16,6 +17,14 @@ export const deleteTarget = (id: string) => invoke<void>("delete_target", { id }
 
 export const setTargetEnabled = (id: string, enabled: boolean) =>
   invoke<void>("set_target_enabled", { id, enabled });
+
+export const snoozeTarget = (id: string, until: number | null) =>
+  invoke<void>("snooze_target", { id, until });
+
+export const snoozeAlerts = (until: number | null) => invoke<void>("snooze_alerts", { until });
+
+export const onSettingsChanged = (handler: () => void) =>
+  listen<number | null>(SETTINGS_EVENT, () => handler());
 
 export const checkNow = (id: string) => invoke<TargetStatus>("check_now", { id });
 
