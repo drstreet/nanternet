@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AddServerModal } from "./components/AddServerModal";
 import { Dashboard } from "./components/Dashboard";
 import { Settings } from "./components/Settings";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { I18nProvider, useI18n } from "./i18n";
 import type { TargetView } from "./types";
 import { useMonitor } from "./useMonitor";
@@ -54,6 +55,8 @@ function Shell({ monitor }: { monitor: ReturnType<typeof useMonitor> }) {
           ))}
         </nav>
       </header>
+
+      <UpdateBanner />
 
       {monitor.error ? (
         <div className="shrink-0 border-b border-bad/40 bg-bad/10 px-5 py-2.5">

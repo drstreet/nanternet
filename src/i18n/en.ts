@@ -94,6 +94,12 @@ export const en = {
   "auth.keepStored": "Leave this empty to keep the stored secret.",
   "auth.clearStored": "Type a single space and save to erase the stored secret.",
 
+  "update.available": "IranNANternet {version} is available.",
+  "update.install": "Install and restart",
+  "update.installing": "Downloading the update…",
+  "update.later": "Later",
+  "update.failed": "The update could not be installed: {reason}",
+
   "history.title": "Last 24 hours",
   "history.uptime": "Uptime {day} over 24 h · {week} over 7 days",
   "history.dayAgo": "24 h ago",

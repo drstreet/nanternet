@@ -38,6 +38,15 @@
     "longDescription": "IranNANternet watches websites, SSH hosts, Docker containers and certificate expiry, and tells apart a real outage from a regional network isolation.",
     "macOS": {
       "minimumSystemVersion": "10.15"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERGQkY2OTcwNkQ4RjI0QzQKUldURUpJOXRjR20vMzAwMkp2b3UwTDBjb3BXMnFCK0FNOGVmYWRyeEd5aGpyanptUXgvQnBCL3UK",
+      "endpoints": [
+        "https://github.com/drstreet/nanternet/releases/latest/download/latest.json"
+      ]
     }
   }
 }
