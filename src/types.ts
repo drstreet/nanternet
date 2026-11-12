@@ -177,6 +177,7 @@ export interface Sample {
   checkedAt: number;
   level: Level;
   durationMs: number;
+  latencyMs?: number;
 }
 
 export interface TargetStatus {

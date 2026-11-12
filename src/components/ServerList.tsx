@@ -237,11 +237,56 @@ function History({ id, checkedAt }: { id: string; checkedAt?: number }) {
           />
         ))}
       </div>
+      <LatencyChart samples={lastDay} start={start} />
       <div className="mt-1 flex justify-between text-xs text-ink-faint" dir="ltr">
         <span>{t("history.dayAgo")}</span>
         <span>{t("history.now")}</span>
       </div>
     </section>
+  );
+}
+
+function LatencyChart({ samples, start }: { samples: Sample[]; start: number }) {
+  const { t } = useI18n();
+  const timed = samples.filter(
+    (sample): sample is Sample & { latencyMs: number } => sample.latencyMs !== undefined,
+  );
+  if (timed.length < 2) return null;
+
+  const sorted = timed.map((sample) => sample.latencyMs).sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const peak = sorted[sorted.length - 1];
+  const ceiling = Math.max(peak, 1);
+  const points = timed
+    .map((sample) => {
+      const x = ((sample.checkedAt - start) / DAY) * 1000;
+      const y = 46 - (sample.latencyMs / ceiling) * 42;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="mt-3">
+      <p className="mb-1 font-mono text-xs text-ink-faint">
+        {t("history.latency", { median, peak })}
+      </p>
+      <svg
+        viewBox="0 0 1000 48"
+        preserveAspectRatio="none"
+        className="h-12 w-full text-brand"
+        role="img"
+        aria-label={t("history.latency", { median, peak })}
+      >
+        <polyline
+          points={points}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    </div>
   );
 }
 

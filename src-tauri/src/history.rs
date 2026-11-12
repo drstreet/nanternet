@@ -22,6 +22,8 @@ pub struct Sample {
     pub checked_at: i64,
     pub level: Level,
     pub duration_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
 }
 
 impl From<&TargetStatus> for Sample {
@@ -30,6 +32,11 @@ impl From<&TargetStatus> for Sample {
             checked_at: status.checked_at,
             level: status.level,
             duration_ms: status.duration_ms,
+            latency_ms: status
+                .website
+                .as_ref()
+                .or(status.port.as_ref())
+                .and_then(|report| report.local.latency_ms),
         }
     }
 }
@@ -132,6 +139,7 @@ mod tests {
             checked_at: t,
             level: l,
             duration_ms: 10,
+            latency_ms: None,
         }
     }
 

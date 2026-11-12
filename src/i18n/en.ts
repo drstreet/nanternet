@@ -113,6 +113,7 @@ export const en = {
 
   "history.title": "Last 24 hours",
   "history.uptime": "Uptime {day} over 24 h · {week} over 7 days",
+  "history.latency": "Response time from your network: median {median} ms, peak {peak} ms",
   "history.dayAgo": "24 h ago",
   "history.now": "now",
 

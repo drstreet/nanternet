@@ -115,6 +115,7 @@ export const fa: Dictionary = {
 
   "history.title": "۲۴ ساعت گذشته",
   "history.uptime": "دسترس‌پذیری ۲۴ ساعت {day} · ۷ روز {week}",
+  "history.latency": "زمان پاسخ از شبکهٔ شما: میانه {median} میلی‌ثانیه، بیشینه {peak} میلی‌ثانیه",
   "history.dayAgo": "۲۴ ساعت پیش",
   "history.now": "اکنون",
 
