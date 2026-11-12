@@ -130,6 +130,21 @@ quiet while two speak up. Set it to **Never** and that group stops raising parti
 The threshold only touches the partial warnings. `iranAccess`, `blockedLocally`, `blockedInsideIran`
 and `down` are all-or-nothing verdicts and are never suppressed, because none of them is ever noise.
 
+## TCP ports
+
+A port target applies the same idea to anything that is not a web page: a VPN inbound, a database, an
+SMTP relay. The local check opens a TCP connection from this machine with a ten second limit, and the
+external one runs check-host's `check-tcp` from the same selection of nodes a website would get.
+
+The verdict table above applies unchanged, with each code under the `port` family instead:
+`port.iranAccess`, `port.blockedLocally`, `port.blockedInsideIran`, `port.down`, `port.ispPartial`,
+`port.abroadPartial`, `port.externalProbeFailed` and `port.healthy`. There is no status code or body to
+inspect, so `unexpectedStatus` and `contentMismatch` have no port equivalent.
+
+Only the handshake is tested and nothing is sent. A port that accepts connections in front of a broken
+service still counts as open; when that matters, point a website target at an HTTP endpoint behind it
+as well.
+
 ## Checking through several DNS resolvers
 
 Off by default, per target. It answers a question the checks above cannot: when a site does not load,

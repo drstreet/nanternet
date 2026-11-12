@@ -245,7 +245,13 @@ async fn to_discord(settings: &Settings, alert: &Alert) {
     if let Some(webhook) = &settings.discord_webhook {
         let payload =
             json!({ "content": clamp(&alert.text(&settings.language, true), DISCORD_LIMIT) });
-        post(webhook, &payload, "discord", settings.proxy_url.as_deref()).await;
+        post(
+            webhook,
+            &payload,
+            "discord",
+            Route::Proxied(settings.proxy_url.as_deref()),
+        )
+        .await;
     }
 }
 
@@ -288,7 +294,7 @@ async fn to_bale(settings: &Settings, alert: &Alert) {
     for chat in settings.bale_chat_ids.clone() {
         let endpoint = endpoint.clone();
         let payload = json!({ "chat_id": chat, "text": text });
-        sending.spawn(async move { post(&endpoint, &payload, "bale", None).await });
+        sending.spawn(async move { post(&endpoint, &payload, "bale", Route::Direct).await });
     }
     while sending.join_next().await.is_some() {}
 }
@@ -296,7 +302,13 @@ async fn to_bale(settings: &Settings, alert: &Alert) {
 async fn to_webhook(settings: &Settings, alert: &Alert) {
     if let Some(url) = &settings.webhook_url {
         let payload = alert.payload(&settings.language);
-        post(url, &payload, "webhook", settings.proxy_url.as_deref()).await;
+        post(
+            url,
+            &payload,
+            "webhook",
+            Route::Proxied(settings.proxy_url.as_deref()),
+        )
+        .await;
     }
 }
 
@@ -325,7 +337,7 @@ struct Telegram {
 impl Telegram {
     async fn send(&self, token: &str, chat: &str) {
         let api = format!("https://api.telegram.org/bot{token}");
-        let proxy = self.proxy.as_deref();
+        let proxy = Route::Proxied(self.proxy.as_deref());
         let rich = json!({
             "chat_id": chat,
             "rich_message": {
@@ -709,16 +721,24 @@ fn report_label(language: &str) -> &'static str {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Route<'a> {
+    Proxied(Option<&'a str>),
+    Direct,
+}
+
 async fn post(
     endpoint: &str,
     payload: &serde_json::Value,
     channel: &str,
-    proxy: Option<&str>,
+    route: Route<'_>,
 ) -> bool {
     let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15));
 
-    if let Some(url) = proxy {
-        match reqwest::Proxy::all(url) {
+    match route {
+        Route::Direct => builder = builder.no_proxy(),
+        Route::Proxied(None) => {}
+        Route::Proxied(Some(url)) => match reqwest::Proxy::all(url) {
             Ok(proxy) => {
                 let local = reqwest::NoProxy::from_string("localhost,127.0.0.1,::1");
                 builder = builder.proxy(proxy.no_proxy(local));
@@ -727,7 +747,7 @@ async fn post(
                 eprintln!("the {channel} proxy {url} was rejected: {err}");
                 return false;
             }
-        }
+        },
     }
 
     let client = match builder.build() {
