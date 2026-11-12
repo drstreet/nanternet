@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import * as api from "./api";
-import type { Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
+import type { BotTokens, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
 
 const FAILED = Symbol("failed");
 
@@ -42,8 +42,10 @@ export function useMonitor() {
     const subscription = api.onStatus((status) =>
       setStatuses((current) => ({ ...current, [status.targetId]: status })),
     );
+    const settingsSubscription = api.onSettingsChanged(() => void reload());
     return () => {
       void subscription.then((unlisten) => unlisten());
+      void settingsSubscription.then((unlisten) => unlisten());
     };
   }, [reload]);
 
@@ -80,6 +82,24 @@ export function useMonitor() {
     [attempt, reload],
   );
 
+  const snooze = useCallback(
+    async (id: string, until: number | null) => {
+      setTargets((current) =>
+        current.map((target) => (target.id === id ? { ...target, snoozedUntil: until } : target)),
+      );
+      if ((await attempt(() => api.snoozeTarget(id, until))) === FAILED) await reload();
+    },
+    [attempt, reload],
+  );
+
+  const silence = useCallback(
+    async (until: number | null) => {
+      if ((await attempt(() => api.snoozeAlerts(until))) === FAILED) return;
+      await reload();
+    },
+    [attempt, reload],
+  );
+
   const check = useCallback(
     async (id: string) => {
       setChecking((current) => [...current, id]);
@@ -97,8 +117,8 @@ export function useMonitor() {
   }, [check, targets]);
 
   const updateSettings = useCallback(
-    async (next: Settings, telegramToken?: string) => {
-      if ((await attempt(() => api.saveSettings(next, telegramToken))) === FAILED) return false;
+    async (next: Settings, tokens: BotTokens) => {
+      if ((await attempt(() => api.saveSettings(next, tokens))) === FAILED) return false;
       await reload();
       return true;
     },
@@ -116,6 +136,8 @@ export function useMonitor() {
     save,
     remove,
     toggle,
+    snooze,
+    silence,
     check,
     checkAll,
     updateSettings,

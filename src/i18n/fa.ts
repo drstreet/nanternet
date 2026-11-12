@@ -32,9 +32,11 @@ export const fa: Dictionary = {
   "list.paused": "متوقف",
 
   "kind.website": "وب‌سایت",
+  "kind.port": "پورت TCP",
   "kind.server": "سرور",
   "kind.domain": "دامنه",
   "kind.website.hint": "شبکه خودتان را با نودهای داخل و خارج ایران مقایسه می‌کند.",
+  "kind.port.hint": "از همین‌جا، از داخل ایران و از خارج یک اتصال TCP باز می‌کند. برای اینباند VPN، دیتابیس، ایمیل و هر چیزی که صفحه وب نیست.",
   "kind.server.hint": "با SSH وصل می‌شود و بار، حافظه، دیسک و سلامت کانتینرها را می‌خواند.",
   "kind.domain.hint": "انقضای گواهی TLS و ثبت دامنه را پایش می‌کند.",
 
@@ -71,6 +73,8 @@ export const fa: Dictionary = {
     "این تنظیم فقط قطعی جزئی را کنترل می‌کند. اگر همه نودهای یک طرف مرز یا همه‌جا با هم قطع شوند، همیشه هشدار داده می‌شود.",
   "field.host": "هاست یا آی‌پی",
   "field.port": "پورت",
+  "field.tcp.hint":
+    "فقط دست‌دهی TCP بررسی می‌شود و چیزی فرستاده نمی‌شود. پورتی که باز است ولی سرویس پشتش خراب است، باز حساب می‌شود.",
   "field.username": "کاربر SSH",
   "field.auth": "روش ورود",
   "field.keyPath": "مسیر کلید خصوصی",
@@ -96,13 +100,28 @@ export const fa: Dictionary = {
   "auth.keepStored": "برای حفظ رمز ذخیره‌شده این فیلد را خالی بگذارید.",
   "auth.clearStored": "برای پاک کردن رمز ذخیره‌شده یک فاصله بنویسید و ذخیره کنید.",
 
+  "update.available": "نسخه {version} ایران‌نان‌ترنت آماده است.",
+  "update.install": "نصب و راه‌اندازی دوباره",
+  "update.installing": "در حال دریافت به‌روزرسانی…",
+  "update.later": "بعداً",
+  "update.failed": "نصب به‌روزرسانی انجام نشد: {reason}",
+
+  "snooze.pick": "بی‌صدا کردن هشدار برای…",
+  "snooze.tag": "بی‌صدا",
+  "snooze.until": "بی‌صدا تا {time}",
+  "snooze.resume": "برگرداندن هشدارها",
+  "snooze.allHour": "بی‌صدا کردن همه برای ۱ ساعت",
+  "snooze.allUntil": "هشدارها تا {time} بی‌صدا هستند. بررسی‌ها ادامه دارند و تاریخچه ثبت می‌شود.",
+
   "history.title": "۲۴ ساعت گذشته",
   "history.uptime": "دسترس‌پذیری ۲۴ ساعت {day} · ۷ روز {week}",
+  "history.latency": "زمان پاسخ از شبکهٔ شما: میانه {median} میلی‌ثانیه، بیشینه {peak} میلی‌ثانیه",
   "history.dayAgo": "۲۴ ساعت پیش",
   "history.now": "اکنون",
 
   "status.lastChecked": "بررسی {ago}",
   "status.never": "هنوز بررسی نشده",
+  "status.connected": "وصل شد",
   "status.took": "{ms} میلی‌ثانیه",
   "status.localNetwork": "شبکه شما",
   "status.external": "نودهای بیرونی",
@@ -141,7 +160,7 @@ export const fa: Dictionary = {
     "هر خط یکی، تا ۳۲ مورد. برای گروه و کانال شناسه عددی مثل -1001234567890، برای چت خصوصی شناسه عددی خودتان، یا یک @نام عمومی. هر هشدار همزمان به همه‌شان می‌رود.",
   "settings.alerts": "چه وقت خبر بده",
   "settings.alerts.hint":
-    "روی نوتیفیکیشن سیستم، دیسکورد و تلگرام یکسان اثر می‌گذارد و هر مورد می‌تواند آن را بازنویسی کند. برگشتن به حالت سالم هم خودش یک رویداد است، پس ساکت کردنش یعنی خبر برگشت هم نمی‌گیرید.",
+    "روی همه کانال‌ها یکسان اثر می‌گذارد و هر مورد می‌تواند آن را بازنویسی کند. برگشتن به حالت سالم هم خودش یک رویداد است، پس ساکت کردنش یعنی خبر برگشت هم نمی‌گیرید.",
   "alerts.all": "همه‌چیز، حتی برگشت به حالت سالم",
   "alerts.problems": "هشدار و بدتر",
   "alerts.critical": "فقط بحرانی",
@@ -149,6 +168,14 @@ export const fa: Dictionary = {
   "alerts.inherit": "هر چه تنظیم کلی می‌گوید",
   "settings.telegramToken": "توکن ربات تلگرام",
   "settings.telegramToken.stored": "توکن ربات در کی‌چین سیستم ذخیره شده است.",
+  "settings.baleChat": "چت‌ها و کانال‌های بله",
+  "settings.baleChat.hint":
+    "هر خط یکی، تا ۳۲ مورد، به‌صورت شناسه عددی یا @نام عمومی. بله داخل ایران در دسترس است، پس این هشدارها مستقیم فرستاده می‌شوند و وقتی تونل قطع است هم می‌رسند.",
+  "settings.baleToken": "توکن ربات بله",
+  "settings.baleToken.stored": "توکن ربات بله در کی‌چین سیستم ذخیره شده است.",
+  "settings.webhook": "نشانی وب‌هوک",
+  "settings.webhook.hint":
+    "هر هشدار به‌صورت JSON با نام مورد، سطح، یافته‌ها و یک فیلد متن آماده به این نشانی POST می‌شود؛ برای ntfy، اسلک، n8n یا اسکریپت خودتان کافی است. اگر پروکسی هشدار تنظیم شده باشد از آن رد می‌شود، به‌جز نشانی‌های همین دستگاه.",
   "settings.proxy": "پروکسی برای ارسال هشدار",
   "settings.proxy.hint":
     "تلگرام و دیسکورد در ایران فیلترند، پس هشدارها راه خروج لازم دارند. این را روی همان پورت محلی کلاینت v2ray یا Xray یا هیدیفای خودت بگذار، معمولاً socks5h://127.0.0.1:10808. پروتکل‌های http و https و socks5 و socks5h پذیرفته می‌شوند. بررسی سایت‌ها عمداً از این پروکسی رد نمی‌شود، وگرنه تونل را اندازه می‌گرفت نه شبکهٔ خودت را.",
@@ -188,6 +215,14 @@ export const fa: Dictionary = {
   "finding.website.dnsBypass": "با تغییر دی‌ان‌اس باز می‌شود",
   "finding.website.dnsUnavailable": "هیچ دی‌ان‌اسی جواب نداد",
   "finding.website.healthy": "سایت سالم است",
+  "finding.port.iranAccess": "پورت ایران‌اکسس شده است",
+  "finding.port.blockedLocally": "پورت از این شبکه مسدود است",
+  "finding.port.blockedInsideIran": "پورت از داخل ایران قابل دسترسی نیست",
+  "finding.port.down": "پورت بسته است یا جواب نمی‌دهد",
+  "finding.port.ispPartial": "بعضی اپراتورهای ایران به پورت نمی‌رسند",
+  "finding.port.abroadPartial": "بعضی نودهای خارج به پورت نمی‌رسند",
+  "finding.port.externalProbeFailed": "بررسی خارجی انجام نشد",
+  "finding.port.healthy": "پورت باز است",
   "finding.server.unreachable": "سرور پاسخ نمی‌دهد",
   "finding.server.authenticationFailed": "ورود SSH رد شد",
   "finding.server.hostKeyMismatch": "کلید میزبان تغییر کرده است",

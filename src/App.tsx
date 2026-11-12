@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AddServerModal } from "./components/AddServerModal";
 import { Dashboard } from "./components/Dashboard";
 import { Settings } from "./components/Settings";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { I18nProvider, useI18n } from "./i18n";
 import type { TargetView } from "./types";
 import { useMonitor } from "./useMonitor";
@@ -55,6 +56,8 @@ function Shell({ monitor }: { monitor: ReturnType<typeof useMonitor> }) {
         </nav>
       </header>
 
+      <UpdateBanner />
+
       {monitor.error ? (
         <div className="shrink-0 border-b border-bad/40 bg-bad/10 px-5 py-2.5">
           <div className="flex items-start justify-between gap-4">
@@ -83,6 +86,9 @@ function Shell({ monitor }: { monitor: ReturnType<typeof useMonitor> }) {
             onToggle={(target) => void monitor.toggle(target.id, !target.enabled)}
             onCheck={(target) => void monitor.check(target.id)}
             onCheckAll={() => void monitor.checkAll()}
+            silencedUntil={monitor.settings?.snoozedUntil ?? null}
+            onSilence={(until) => void monitor.silence(until)}
+            onSnooze={(target, until) => void monitor.snooze(target.id, until)}
           />
         ) : monitor.settings ? (
           <Settings settings={monitor.settings} onSave={monitor.updateSettings} />

@@ -117,12 +117,27 @@ impl CheckHost {
     }
 
     pub async fn http_probe(&self, url: &str, nodes: &[Node]) -> Result<Probe> {
-        let mut query: Vec<(&str, &str)> = vec![("host", url)];
+        self.run("check-http", url, nodes, parse_http_result).await
+    }
+
+    pub async fn tcp_probe(&self, address: &str, nodes: &[Node]) -> Result<Probe> {
+        self.run("check-tcp", address, nodes, parse_tcp_result)
+            .await
+    }
+
+    async fn run(
+        &self,
+        check: &str,
+        host: &str,
+        nodes: &[Node],
+        parse: fn(&serde_json::Value) -> Option<NodeOutcome>,
+    ) -> Result<Probe> {
+        let mut query: Vec<(&str, &str)> = vec![("host", host)];
         query.extend(nodes.iter().map(|node| ("node", node.host.as_str())));
 
         let started: StartResponse = self
             .http
-            .get(format!("{ENDPOINT}/check-http"))
+            .get(format!("{ENDPOINT}/{check}"))
             .header(reqwest::header::ACCEPT, "application/json")
             .query(&query)
             .send()
@@ -163,7 +178,7 @@ impl CheckHost {
                 let Some(value) = payload.get(&node.host) else {
                     continue;
                 };
-                let Some(outcome) = parse_http_result(value) else {
+                let Some(outcome) = parse(value) else {
                     continue;
                 };
                 let mut result = node.pending();
@@ -291,6 +306,21 @@ pub fn parse_http_result(value: &serde_json::Value) -> Option<NodeOutcome> {
     })
 }
 
+pub fn parse_tcp_result(value: &serde_json::Value) -> Option<NodeOutcome> {
+    let row = value.as_array()?.first()?.as_object()?;
+    let error = row.get("error").and_then(text);
+    Some(NodeOutcome {
+        reachable: error.is_none(),
+        latency_ms: row
+            .get("time")
+            .and_then(serde_json::Value::as_f64)
+            .map(|seconds| (seconds * 1000.0).round() as u64),
+        message: error,
+        status: None,
+        address: row.get("address").and_then(text),
+    })
+}
+
 fn text(value: &serde_json::Value) -> Option<String> {
     match value {
         serde_json::Value::String(inner) if inner.is_empty() => None,
@@ -329,6 +359,25 @@ mod tests {
 
     fn parse(raw: &str) -> Option<NodeOutcome> {
         parse_http_result(&serde_json::from_str(raw).unwrap())
+    }
+
+    #[test]
+    fn an_open_port_is_reachable_and_a_refused_one_is_not() {
+        let open: serde_json::Value =
+            serde_json::from_str(r#"[{"time": 0.042, "address": "185.8.172.10"}]"#).unwrap();
+        let outcome = parse_tcp_result(&open).unwrap();
+        assert!(outcome.reachable);
+        assert_eq!(outcome.latency_ms, Some(42));
+        assert_eq!(outcome.address.as_deref(), Some("185.8.172.10"));
+
+        let refused: serde_json::Value =
+            serde_json::from_str(r#"[{"error": "Connection refused"}]"#).unwrap();
+        let outcome = parse_tcp_result(&refused).unwrap();
+        assert!(!outcome.reachable);
+        assert_eq!(outcome.message.as_deref(), Some("Connection refused"));
+
+        assert!(parse_tcp_result(&serde_json::Value::Null).is_none());
+        assert!(parse_tcp_result(&serde_json::json!([null])).is_none());
     }
 
     #[test]

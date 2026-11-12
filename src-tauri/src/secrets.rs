@@ -5,6 +5,7 @@ use crate::error::Result;
 const SERVICE: &str = "IranNANternet";
 
 pub const TELEGRAM_TOKEN: &str = "notifications.telegram-token";
+pub const BALE_TOKEN: &str = "notifications.bale-token";
 
 pub fn target_key(id: &str) -> String {
     format!("target.{id}")

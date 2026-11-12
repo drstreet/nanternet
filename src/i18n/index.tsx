@@ -17,6 +17,7 @@ interface Translator {
   finding: (code: string) => string;
   relative: (unixSeconds: number) => string;
   date: (unixSeconds: number) => string;
+  clock: (unixSeconds: number) => string;
 }
 
 const context = createContext<Translator | null>(null);
@@ -62,6 +63,13 @@ export function I18nProvider({
           year: "numeric",
           month: "short",
           day: "numeric",
+        }),
+      clock: (unixSeconds) =>
+        new Date(unixSeconds * 1000).toLocaleString(locale, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
         }),
     };
   }, [language]);

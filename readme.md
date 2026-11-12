@@ -58,6 +58,14 @@ resolvers that matter here offer no DNS-over-HTTPS.
 Resolvers that merely disagree on the address are not reported. A CDN hands a different edge to every
 resolver, and treating that as a fault would be a false-alarm machine.
 
+### TCP ports
+
+For anything that is not a web page, such as a VPN inbound, a database or a mail relay, a port target
+opens a TCP connection from your machine and runs check-host's TCP probe from the same spread of
+nodes. It reaches the same verdicts as a website: isolated to Iran, blocked on your network, filtered
+inbound, partially unreachable, or closed. Only the handshake is tested, so a port that accepts
+connections in front of a broken service still counts as open.
+
 ### Servers over SSH
 
 One connection per check runs a single batched command and parses the result locally:
@@ -95,8 +103,8 @@ list, which is correct for common cases including `.co.uk` and `.co.ir` but is n
 
 ## Notifications
 
-Alerts go to native desktop notifications, a Discord webhook, and a Telegram bot, in whichever
-combination is configured. Two behaviours keep them useful:
+Alerts go to native desktop notifications, Discord, Telegram, Bale and a plain JSON webhook, in
+whichever combination is configured. Two behaviours keep them useful:
 
 - an alert fires only when the verdict actually changes, not on every cycle
 - a failure must repeat a configurable number of times before it is announced, so one dropped packet
@@ -106,6 +114,14 @@ Telegram and Discord are both blocked in Iran, so alerts can be routed through a
 setting at the local inbound your v2ray, Xray or Hiddify client already listens on, usually
 `socks5h://127.0.0.1:10808`. Site checks deliberately ignore it, otherwise they would be measuring
 the tunnel instead of your network.
+
+Bale is reachable inside Iran, so Bale alerts never go through the proxy and still arrive when the
+tunnel is down. The webhook POSTs every alert as JSON, which covers ntfy, Slack, n8n or a script of
+your own.
+
+A target can be silenced for one, four or 24 hours from its card, and every alert at once for an hour
+from the dashboard or the tray menu. Checks and history carry on while alerts are silenced, and a
+problem that outlasts the silence is announced as usual.
 
 Closing the window leaves the app running in the tray so checks continue.
 
@@ -131,7 +147,10 @@ on Linux.
 
 Ready-made bundles for macOS (Apple Silicon and Intel), Windows and Linux are attached to every
 [release](https://github.com/drstreet/nanternet/releases). They are not code-signed yet, so each
-platform asks for confirmation once, before the first launch:
+platform asks for confirmation once, before the first launch. After that the app checks for new
+releases by itself and offers to install them.
+
+On the first launch:
 
 - **macOS** says the app is damaged or comes from an unidentified developer. Drag it into
   Applications, then clear the quarantine flag:
@@ -162,6 +181,10 @@ Backend tests cover the parsers and the verdict logic, which are the parts that 
 ```sh
 cd src-tauri && cargo test
 ```
+
+Releases are cut by pushing a tag such as `v0.2.0`. The workflow builds every platform, signs the
+bundles for the in-app updater with the key in the `TAURI_SIGNING_PRIVATE_KEY` repository secret, and
+publishes the release once all of them are attached. Without that secret the bundle step fails.
 
 `tools/make-icon.py` regenerates the app icon from scratch with no image dependencies; feed its
 output to `npx tauri icon`.

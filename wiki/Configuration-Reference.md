@@ -39,6 +39,7 @@ Both keys are optional; a missing or absent file yields no targets and default s
   "enabled": true,
   "intervalSecs": 120,
   "alerts": null,
+  "snoozedUntil": null,
   "spec": {}
 }
 ```
@@ -50,7 +51,8 @@ Both keys are optional; a missing or absent file yields no targets and default s
 | `enabled` | boolean | `true` | `false` pauses checks without losing configuration. |
 | `intervalSecs` | number | `120` | Seconds between checks, floored at 15. |
 | `alerts` | `"all"`, `"problems"`, `"critical"`, `"off"` or null | `null` | When this target is worth a notification. `null` follows the global `alerts` setting. |
-| `spec` | object | required | Discriminated by `kind`. |
+| `snoozedUntil` | number or null | `null` | Unix seconds until which this target sends no alerts. Checks and history continue. Set from the card; saving the target from the edit form leaves it alone. |
+| `spec` | object | required | Discriminated by `kind`: `website`, `port`, `server` or `domain`. |
 
 ## Website spec
 
@@ -90,6 +92,28 @@ distinct networks simply gets you all of them.
 
 Both thresholds gate only the partial-failure warnings. Losing every node on one side of the border,
 or everywhere at once, is always reported regardless.
+
+## Port spec
+
+```json
+{
+  "kind": "port",
+  "host": "vpn.example.ir",
+  "port": 443,
+  "externalProbe": true,
+  "externalIntervalSecs": 900,
+  "iranNodes": 3,
+  "abroadNodes": 4,
+  "iranAlertThreshold": 1,
+  "abroadAlertThreshold": 1
+}
+```
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `host` | string | required | Hostname, IPv4 or IPv6 address. Brackets around an IPv6 address are stripped. |
+| `port` | number | required | 1 to 65535. |
+| `externalProbe`, `externalIntervalSecs`, `iranNodes`, `abroadNodes`, `iranAlertThreshold`, `abroadAlertThreshold` | | | Same meaning, defaults and limits as for a website, using check-host's TCP probe instead of its HTTP one. |
 
 ## Server spec
 
@@ -162,10 +186,13 @@ in the keychain.
   "alerts": "all",
   "discordWebhook": null,
   "telegramChatIds": [],
+  "baleChatIds": [],
+  "webhookUrl": null,
   "proxyUrl": null,
   "dnsResolvers": [],
   "confirmations": 2,
-  "startAtLogin": false
+  "startAtLogin": false,
+  "snoozedUntil": null
 }
 ```
 
@@ -176,10 +203,13 @@ in the keychain.
 | `discordWebhook` | string or null | `null` | Blank strings are normalised to `null`. |
 | `alerts` | `"all"`, `"problems"`, `"critical"` or `"off"` | `"all"` | Which severities are worth a notification, on every channel. A target's own `alerts` overrides it. |
 | `telegramChatIds` | string array | `[]` | Every alert goes to all of them. Numeric IDs or public `@name`s, validated on save. Duplicates and blanks are dropped, capped at 32. A single legacy `telegramChatId` string is folded in as the first entry on load. |
-| `proxyUrl` | string or null | `null` | Proxy for Discord and Telegram delivery only. Scheme must be `http`, `https`, `socks5` or `socks5h`; anything else is rejected on save. Site checks ignore it. |
+| `baleChatIds` | string array | `[]` | Same rules as `telegramChatIds`. Bale is never sent through the proxy. |
+| `webhookUrl` | string or null | `null` | Receives every alert as a JSON POST. Must be `http` or `https`. |
+| `proxyUrl` | string or null | `null` | Proxy for Discord, Telegram and webhook delivery only. Never applied to localhost. Scheme must be `http`, `https`, `socks5` or `socks5h`; anything else is rejected on save. Site checks ignore it. |
 | `dnsResolvers` | string array | `[]` | Extra resolver IP addresses, added to the built-in list. IPs only, hostnames are rejected on save. Capped at 12 including built-ins. |
 | `confirmations` | number | `2` | Consecutive failing checks before alerting. Clamped to 1 through 10. |
 | `startAtLogin` | boolean | `false` | Toggling this registers or removes a real login item. |
+| `snoozedUntil` | number or null | `null` | Unix seconds until which no alert is sent for any target. Set from the dashboard or the tray menu, never by saving the settings form. |
 
 ## Secrets
 
@@ -190,6 +220,7 @@ name `IranNANternet`:
 | --- | --- |
 | `target.<target id>` | SSH password or private key passphrase |
 | `notifications.telegram-token` | Telegram bot token |
+| `notifications.bale-token` | Bale bot token |
 
 - macOS: Keychain, inspectable with Keychain Access
 - Windows: Credential Manager

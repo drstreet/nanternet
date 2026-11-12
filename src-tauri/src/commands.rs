@@ -22,6 +22,7 @@ pub struct SettingsView {
     #[serde(flatten)]
     settings: Settings,
     telegram_token_stored: bool,
+    bale_token_stored: bool,
 }
 
 #[tauri::command]
@@ -69,7 +70,13 @@ pub async fn save_target(
                 .iter_mut()
                 .find(|candidate| candidate.id == stored.id)
             {
-                Some(existing) => *existing = stored,
+                Some(existing) => {
+                    let snoozed_until = existing.snoozed_until;
+                    *existing = Target {
+                        snoozed_until,
+                        ..stored
+                    }
+                }
                 None => store.targets.push(stored),
             }
             Ok(())
@@ -115,6 +122,30 @@ pub async fn set_target_enabled(
 }
 
 #[tauri::command]
+pub async fn snooze_target(
+    state: State<'_, AppState>,
+    id: String,
+    until: Option<i64>,
+) -> Result<()> {
+    state
+        .mutate(
+            move |store| match store.targets.iter_mut().find(|target| target.id == id) {
+                Some(target) => {
+                    target.snoozed_until = until;
+                    Ok(())
+                }
+                None => Err(Error::msg("that target no longer exists")),
+            },
+        )
+        .await
+}
+
+#[tauri::command]
+pub async fn snooze_alerts(app: AppHandle, until: Option<i64>) -> Result<()> {
+    crate::tray::silence(&app, until).await
+}
+
+#[tauri::command]
 pub async fn check_now(app: AppHandle, id: String) -> Result<TargetStatus> {
     let target = app
         .state::<AppState>()
@@ -139,6 +170,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsView> {
     Ok(SettingsView {
         settings: state.settings().await,
         telegram_token_stored: secrets::exists(secrets::TELEGRAM_TOKEN).await,
+        bale_token_stored: secrets::exists(secrets::BALE_TOKEN).await,
     })
 }
 
@@ -148,17 +180,17 @@ pub async fn save_settings(
     state: State<'_, AppState>,
     mut settings: Settings,
     telegram_token: Option<String>,
+    bale_token: Option<String>,
 ) -> Result<Settings> {
     settings.normalize();
     check_proxy(settings.proxy_url.as_deref())?;
     check_resolvers(&settings.dns_resolvers)?;
     check_chats(&settings.telegram_chat_ids)?;
+    check_chats(&settings.bale_chat_ids)?;
+    check_webhook(settings.webhook_url.as_deref())?;
 
-    match telegram_token.as_deref().map(str::trim) {
-        Some("") => secrets::forget(secrets::TELEGRAM_TOKEN).await?,
-        Some(token) => secrets::store(secrets::TELEGRAM_TOKEN, token).await?,
-        None => {}
-    }
+    remember_token(secrets::TELEGRAM_TOKEN, telegram_token.as_deref()).await?;
+    remember_token(secrets::BALE_TOKEN, bale_token.as_deref()).await?;
 
     let launcher = app.autolaunch();
     let already = launcher.is_enabled().unwrap_or(false);
@@ -172,9 +204,10 @@ pub async fn save_settings(
             .map_err(|err| Error::msg(format!("could not remove the login item: {err}")))?;
     }
 
-    let stored = settings.clone();
+    let mut stored = settings.clone();
     state
         .mutate(move |store| {
+            stored.snoozed_until = store.settings.snoozed_until;
             store.settings = stored;
             Ok(())
         })
@@ -212,6 +245,30 @@ fn check_proxy(url: Option<&str>) -> Result<()> {
     match parsed.host_str() {
         Some(_) => Ok(()),
         None => Err(Error::msg("that proxy address has no host")),
+    }
+}
+
+async fn remember_token(key: &str, token: Option<&str>) -> Result<()> {
+    match token.map(str::trim) {
+        Some("") => secrets::forget(key).await,
+        Some(token) => secrets::store(key, token).await,
+        None => Ok(()),
+    }
+}
+
+fn check_webhook(url: Option<&str>) -> Result<()> {
+    let Some(url) = url else {
+        return Ok(());
+    };
+    let usable = reqwest::Url::parse(url).is_ok_and(|parsed| {
+        matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some()
+    });
+    if usable {
+        Ok(())
+    } else {
+        Err(Error::msg(format!(
+            "{url:?} is not a web address; a webhook must start with https:// or http://"
+        )))
     }
 }
 
@@ -253,6 +310,15 @@ fn describe_endpoint(target: &Target) -> Result<()> {
                 Some(_) => Ok(()),
                 None => Err(Error::msg("that website address has no host")),
             }),
+        TargetSpec::Port(spec) => {
+            if spec.host.is_empty() || spec.host.contains(char::is_whitespace) {
+                Err(Error::msg("a port check needs a hostname or IP address"))
+            } else if spec.port == 0 {
+                Err(Error::msg("a port check needs a port between 1 and 65535"))
+            } else {
+                Ok(())
+            }
+        }
         TargetSpec::Server(spec) => {
             if spec.host.is_empty() {
                 Err(Error::msg("a server needs a hostname or IP address"))

@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::config::{Target, TargetSpec};
+use crate::config::{snoozed, Target, TargetSpec};
 use crate::error::Result;
 use crate::notification_engine::{self, Alert};
 use crate::state::AppState;
@@ -95,7 +95,10 @@ pub async fn visit(app: AppHandle, target: Target, slow: bool) -> Result<TargetS
 
     let settings = state.settings().await;
     let rule = target.alerts.unwrap_or(settings.alerts);
-    if state.announce(&status, settings.confirmations).await && rule.allows(status.level) {
+    let now = crate::unix_now();
+    let quiet = snoozed(settings.snoozed_until, now) || snoozed(target.snoozed_until, now);
+    if !quiet && state.announce(&status, settings.confirmations).await && rule.allows(status.level)
+    {
         let alert = Alert::of(&target, &status);
         notification_engine::dispatch(&app, &settings, &alert).await;
     }
@@ -150,6 +153,34 @@ async fn examine(app: &AppHandle, target: &Target, slow: bool) -> TargetStatus {
                 status.dns = dns;
             }
             status.website = Some(report);
+            status.seal(findings, started)
+        }
+        TargetSpec::Port(spec) => {
+            let local = network_checker::probe_port_locally(spec).await;
+            let carried = state
+                .status_of(&target.id)
+                .await
+                .and_then(|previous| previous.port);
+            let mut external = carried.as_ref().and_then(|report| report.external.clone());
+            let mut external_error = carried.and_then(|report| report.external_error);
+
+            if spec.external_probe && slow {
+                match network_checker::probe_port_externally(&state.checkhost, spec).await {
+                    Ok(probe) => {
+                        external = Some(probe);
+                        external_error = None;
+                    }
+                    Err(err) => external_error = Some(err.to_string()),
+                }
+            }
+
+            let report = WebsiteReport {
+                local,
+                external: external.filter(|_| spec.external_probe),
+                external_error: external_error.filter(|_| spec.external_probe),
+            };
+            let findings = network_checker::classify_port(spec, &report);
+            status.port = Some(report);
             status.seal(findings, started)
         }
         TargetSpec::Server(spec) => {

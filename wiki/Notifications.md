@@ -165,6 +165,43 @@ trade worth making.
 Telegram's API is not reachable from most Iranian networks without a proxy, which is what the setting
 below is for.
 
+### Bale
+
+Bale is a domestic messenger whose bot API follows Telegram's, and unlike every other remote channel
+here it is reachable from inside Iran. Bale alerts are therefore sent directly, never through the alert
+proxy or a system proxy, and they keep arriving on the days the tunnel is down, which tend to be the
+days that matter.
+
+Create a bot with [@BotFather](https://ble.ir/botfather) inside Bale, paste its token into Settings and
+list the chats, groups or channels it should write to, one per line. The bot has to be a member of a
+group or an admin of a channel before it can post there. Bale has no rich tables, so the message is
+the plain text version of the alert, capped at 3900 characters. The token is kept in the system
+keychain, like the Telegram one.
+
+### Webhook
+
+For anything without a dedicated integration, every alert is POSTed as JSON to the webhook URL:
+
+```json
+{
+  "target": "Company site",
+  "subject": "https://example.ir",
+  "level": "critical",
+  "title": "🔴 Company site — Critical",
+  "text": "the same text a Bale or Discord message carries",
+  "findings": [{ "code": "website.blockedInsideIran", "level": "critical", "detail": "…" }],
+  "report": "https://check-host.net/check-report/…",
+  "sentAt": 1767225600
+}
+```
+
+`text` is ready to forward as it is, which is all ntfy or a Slack incoming webhook needs once an n8n or
+similar step maps it across. `findings[].code` is stable and matches the findings reference below, so
+scripts can branch on it. Any 2xx response counts as delivered.
+
+The webhook goes through the alert proxy when one is set, except for `localhost`, `127.0.0.1` and
+`::1`, so a receiver running on the same machine is always reached directly.
+
 ### Proxy for alerts
 
 Telegram and Discord are both blocked in Iran, so a monitor that can watch a site but never report on
@@ -196,6 +233,17 @@ sending your bot token down the very route you are avoiding is not a helpful fal
 `HTTPS_PROXY` in the environment is still honoured when this setting is empty, so an existing setup
 keeps working. The local website probe ignores both, so it keeps measuring your real network rather
 than your tunnel. The DNS check ignores both as well, for the same reason.
+
+## Silencing alerts
+
+A target's card offers to silence it for one, four or 24 hours, which is what a planned deploy or a
+server reboot calls for. The dashboard and the tray menu silence every target at once for an hour, and
+both offer to resume early.
+
+While a target is silenced its checks keep running, the dashboard keeps updating and history keeps
+recording. Only the alerts stop. Alert tracking is paused rather than fed, so when the silence ends
+the next check is compared with what was last announced: a problem that is still there gets
+announced as usual, and one that came and went in the meantime is never mentioned.
 
 ## What an alert looks like
 

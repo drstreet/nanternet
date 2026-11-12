@@ -6,7 +6,10 @@
 
 Ready-made bundles for macOS (Apple Silicon and Intel), Windows and Linux are attached to every
 [release](https://github.com/drstreet/nanternet/releases). They are not code-signed yet, so each
-platform asks for confirmation once, before the first launch:
+platform asks for confirmation once, before the first launch. After that the app checks for new
+releases by itself and offers to install them.
+
+On the first launch:
 
 - **macOS** says the app is damaged or comes from an unidentified developer. Drag it into
   Applications, then clear the quarantine flag:

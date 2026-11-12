@@ -10,6 +10,7 @@ pub const MIN_EXTERNAL_INTERVAL: u64 = 300;
 pub const MAX_PROBE_NODES: usize = 8;
 pub const REGISTRATION_INTERVAL: u64 = 43_200;
 pub const MAX_TELEGRAM_CHATS: usize = 32;
+pub const MAX_BALE_CHATS: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -116,6 +117,35 @@ pub struct WebsiteSpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortSpec {
+    pub host: String,
+    pub port: u16,
+    #[serde(default = "enabled")]
+    pub external_probe: bool,
+    #[serde(default = "default_external_interval")]
+    pub external_interval_secs: u64,
+    #[serde(default = "default_iran_nodes")]
+    pub iran_nodes: usize,
+    #[serde(default = "default_abroad_nodes")]
+    pub abroad_nodes: usize,
+    #[serde(default = "default_alert_threshold")]
+    pub iran_alert_threshold: usize,
+    #[serde(default = "default_alert_threshold")]
+    pub abroad_alert_threshold: usize,
+}
+
+impl PortSpec {
+    pub fn address(&self) -> String {
+        if self.host.contains(':') {
+            format!("[{}]:{}", self.host, self.port)
+        } else {
+            format!("{}:{}", self.host, self.port)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "camelCase")]
 pub enum SshAuth {
     #[serde(rename_all = "camelCase")]
@@ -165,6 +195,7 @@ pub struct DomainSpec {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TargetSpec {
     Website(WebsiteSpec),
+    Port(PortSpec),
     Server(ServerSpec),
     Domain(DomainSpec),
 }
@@ -181,7 +212,13 @@ pub struct Target {
     pub interval_secs: u64,
     #[serde(default)]
     pub alerts: Option<AlertLevel>,
+    #[serde(default)]
+    pub snoozed_until: Option<i64>,
     pub spec: TargetSpec,
+}
+
+pub fn snoozed(until: Option<i64>, now: i64) -> bool {
+    until.is_some_and(|until| until > now)
 }
 
 impl Target {
@@ -212,6 +249,23 @@ impl Target {
                         spec.expected_body = None;
                     }
                 }
+            }
+            TargetSpec::Port(spec) => {
+                spec.host = spec
+                    .host
+                    .trim()
+                    .trim_start_matches('[')
+                    .trim_end_matches(']')
+                    .to_owned();
+                spec.external_interval_secs = spec
+                    .external_interval_secs
+                    .max(MIN_EXTERNAL_INTERVAL)
+                    .max(self.interval_secs);
+                spec.iran_nodes = spec.iran_nodes.min(MAX_PROBE_NODES);
+                spec.abroad_nodes = spec.abroad_nodes.min(MAX_PROBE_NODES);
+                spec.iran_alert_threshold = spec.iran_alert_threshold.min(spec.iran_nodes.max(1));
+                spec.abroad_alert_threshold =
+                    spec.abroad_alert_threshold.min(spec.abroad_nodes.max(1));
             }
             TargetSpec::Server(spec) => {
                 spec.host = spec.host.trim().to_owned();
@@ -245,6 +299,7 @@ impl Target {
             TargetSpec::Website(spec) if spec.external_probe || spec.dns_probe => {
                 Some(spec.external_interval_secs)
             }
+            TargetSpec::Port(spec) if spec.external_probe => Some(spec.external_interval_secs),
             TargetSpec::Domain(spec) if spec.check_registration => Some(REGISTRATION_INTERVAL),
             _ => None,
         }
@@ -267,6 +322,10 @@ pub struct Settings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub telegram_chat_id: Option<String>,
     #[serde(default)]
+    pub bale_chat_ids: Vec<String>,
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+    #[serde(default)]
     pub proxy_url: Option<String>,
     #[serde(default)]
     pub dns_resolvers: Vec<String>,
@@ -274,6 +333,8 @@ pub struct Settings {
     pub confirmations: u32,
     #[serde(default)]
     pub start_at_login: bool,
+    #[serde(default)]
+    pub snoozed_until: Option<i64>,
 }
 
 impl Default for Settings {
@@ -285,10 +346,13 @@ impl Default for Settings {
             discord_webhook: None,
             telegram_chat_ids: Vec::new(),
             telegram_chat_id: None,
+            bale_chat_ids: Vec::new(),
+            webhook_url: None,
             proxy_url: None,
             dns_resolvers: Vec::new(),
             confirmations: default_confirmations(),
             start_at_login: false,
+            snoozed_until: None,
         }
     }
 }
@@ -301,18 +365,13 @@ impl Settings {
         self.confirmations = self.confirmations.clamp(1, 10);
         blank_to_none(&mut self.discord_webhook);
         blank_to_none(&mut self.proxy_url);
+        blank_to_none(&mut self.webhook_url);
 
         if let Some(single) = self.telegram_chat_id.take() {
             self.telegram_chat_ids.insert(0, single);
         }
-        let mut seen = std::collections::HashSet::new();
-        self.telegram_chat_ids = self
-            .telegram_chat_ids
-            .iter()
-            .map(|entry| entry.trim().to_owned())
-            .filter(|entry| !entry.is_empty() && seen.insert(entry.clone()))
-            .collect();
-        self.telegram_chat_ids.truncate(MAX_TELEGRAM_CHATS);
+        tidy_chats(&mut self.telegram_chat_ids, MAX_TELEGRAM_CHATS);
+        tidy_chats(&mut self.bale_chat_ids, MAX_BALE_CHATS);
 
         self.dns_resolvers = self
             .dns_resolvers
@@ -322,6 +381,16 @@ impl Settings {
             .collect();
         self.dns_resolvers.truncate(crate::dns_probe::MAX_RESOLVERS);
     }
+}
+
+fn tidy_chats(chats: &mut Vec<String>, limit: usize) {
+    let mut seen = std::collections::HashSet::new();
+    *chats = chats
+        .iter()
+        .map(|entry| entry.trim().to_owned())
+        .filter(|entry| !entry.is_empty() && seen.insert(entry.clone()))
+        .collect();
+    chats.truncate(limit);
 }
 
 fn blank_to_none(value: &mut Option<String>) {
@@ -406,6 +475,13 @@ mod tests {
     }
 
     #[test]
+    fn a_snooze_only_holds_until_its_deadline() {
+        assert!(!snoozed(None, 100));
+        assert!(!snoozed(Some(100), 100));
+        assert!(snoozed(Some(101), 100));
+    }
+
+    #[test]
     fn chat_ids_are_trimmed_and_never_repeated() {
         let mut settings = Settings {
             telegram_chat_ids: vec![
@@ -414,10 +490,14 @@ mod tests {
                 "-100111".into(),
                 "@channel".into(),
             ],
+            bale_chat_ids: vec![" 4242 ".into(), "4242".into()],
+            webhook_url: Some("   ".into()),
             ..Settings::default()
         };
         settings.normalize();
         assert_eq!(settings.telegram_chat_ids, ["-100111", "@channel"]);
+        assert_eq!(settings.bale_chat_ids, ["4242"]);
+        assert_eq!(settings.webhook_url, None);
     }
 
     #[test]

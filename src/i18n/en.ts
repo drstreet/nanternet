@@ -30,9 +30,11 @@ export const en = {
   "list.paused": "Paused",
 
   "kind.website": "Website",
+  "kind.port": "TCP port",
   "kind.server": "Server",
   "kind.domain": "Domain",
   "kind.website.hint": "Compares your own network against vantage points inside and outside Iran.",
+  "kind.port.hint": "Opens a TCP connection from here, from Iran and from abroad. For VPN inbounds, databases, mail and anything that is not a web page.",
   "kind.server.hint": "Connects over SSH to read load, memory, disk and container health.",
   "kind.domain.hint": "Watches TLS certificate and domain registration expiry.",
 
@@ -69,6 +71,8 @@ export const en = {
     "Only partial failures are gated here. Losing every node on one side of the border, or everywhere at once, always alerts.",
   "field.host": "Host or IP",
   "field.port": "Port",
+  "field.tcp.hint":
+    "Only the TCP handshake is checked, nothing is sent. An open port with a broken service behind it still counts as open.",
   "field.username": "SSH user",
   "field.auth": "Authentication",
   "field.keyPath": "Private key path",
@@ -94,13 +98,28 @@ export const en = {
   "auth.keepStored": "Leave this empty to keep the stored secret.",
   "auth.clearStored": "Type a single space and save to erase the stored secret.",
 
+  "update.available": "IranNANternet {version} is available.",
+  "update.install": "Install and restart",
+  "update.installing": "Downloading the update…",
+  "update.later": "Later",
+  "update.failed": "The update could not be installed: {reason}",
+
+  "snooze.pick": "Silence alerts for…",
+  "snooze.tag": "silenced",
+  "snooze.until": "Silenced until {time}",
+  "snooze.resume": "Resume alerts",
+  "snooze.allHour": "Silence everything for 1 hour",
+  "snooze.allUntil": "Alerts are silenced until {time}. Checks keep running and history keeps recording.",
+
   "history.title": "Last 24 hours",
   "history.uptime": "Uptime {day} over 24 h · {week} over 7 days",
+  "history.latency": "Response time from your network: median {median} ms, peak {peak} ms",
   "history.dayAgo": "24 h ago",
   "history.now": "now",
 
   "status.lastChecked": "Checked {ago}",
   "status.never": "not checked yet",
+  "status.connected": "connected",
   "status.took": "took {ms} ms",
   "status.localNetwork": "Your network",
   "status.external": "Outside vantage points",
@@ -139,7 +158,7 @@ export const en = {
     "One per line, up to 32. Use a numeric ID such as -1001234567890 for a group or channel, your own numeric ID for a private chat, or a public @name. Every alert goes to all of them at once.",
   "settings.alerts": "Notify me about",
   "settings.alerts.hint":
-    "Applies to desktop, Discord and Telegram alike. Individual targets can override it. Note that a return to healthy is itself an event, so silencing it means no recovery notice either.",
+    "Applies to every channel alike. Individual targets can override it. Note that a return to healthy is itself an event, so silencing it means no recovery notice either.",
   "alerts.all": "Everything, including recoveries",
   "alerts.problems": "Warnings and worse",
   "alerts.critical": "Critical only",
@@ -147,6 +166,14 @@ export const en = {
   "alerts.inherit": "Whatever the global setting says",
   "settings.telegramToken": "Telegram bot token",
   "settings.telegramToken.stored": "A bot token is stored in the system keychain.",
+  "settings.baleChat": "Bale chats and channels",
+  "settings.baleChat.hint":
+    "One per line, up to 32, as a numeric ID or a public @name. Bale is reachable inside Iran, so these alerts go out directly and still arrive when the tunnel is down.",
+  "settings.baleToken": "Bale bot token",
+  "settings.baleToken.stored": "A Bale bot token is stored in the system keychain.",
+  "settings.webhook": "Webhook URL",
+  "settings.webhook.hint":
+    "Every alert is POSTed here as JSON with the target, level, findings and a ready-made text field, which is enough for ntfy, Slack, n8n or your own script. It goes through the alert proxy when one is set, except for addresses on this machine.",
   "settings.proxy": "Proxy for alerts",
   "settings.proxy.hint":
     "Telegram and Discord are blocked in Iran, so alerts need a way out. Point this at the local inbound your v2ray, Xray or Hiddify client already listens on, usually socks5h://127.0.0.1:10808. Accepts http, https, socks5 and socks5h. Site checks ignore it on purpose, otherwise they would measure the tunnel instead of your network.",
@@ -186,6 +213,14 @@ export const en = {
   "finding.website.dnsBypass": "Another resolver still reaches it",
   "finding.website.dnsUnavailable": "No resolver answered",
   "finding.website.healthy": "Site is healthy",
+  "finding.port.iranAccess": "Port is behind Iran-access isolation",
+  "finding.port.blockedLocally": "Port is blocked on this network",
+  "finding.port.blockedInsideIran": "Port is unreachable from inside Iran",
+  "finding.port.down": "Port is closed or not answering",
+  "finding.port.ispPartial": "Some Iranian ISPs cannot reach the port",
+  "finding.port.abroadPartial": "Some foreign vantage points cannot reach the port",
+  "finding.port.externalProbeFailed": "External probe unavailable",
+  "finding.port.healthy": "Port is open",
   "finding.server.unreachable": "Server is not answering",
   "finding.server.authenticationFailed": "SSH authentication rejected",
   "finding.server.hostKeyMismatch": "Host key changed",

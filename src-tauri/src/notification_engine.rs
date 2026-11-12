@@ -6,11 +6,12 @@ use crate::config::{ServerSpec, Settings, Target, TargetSpec};
 use crate::secrets;
 use crate::status::{
     DnsAttempt, DnsReport, DomainReport, Finding, Level, LocalProbe, NodeResult, ServerReport,
-    TargetStatus,
+    TargetStatus, WebsiteReport,
 };
 
 const DISCORD_LIMIT: usize = 1900;
 const TELEGRAM_LIMIT: usize = 3900;
+const BALE_LIMIT: usize = 3900;
 const DETAIL_LIMIT: usize = 160;
 const MAX_LINES: usize = 8;
 const MAX_ROWS: usize = 16;
@@ -196,6 +197,19 @@ impl Alert {
         self.grid().map(|rows| table(&rows))
     }
 
+    pub fn payload(&self, language: &str) -> serde_json::Value {
+        json!({
+            "target": self.target,
+            "subject": self.subject,
+            "level": self.level,
+            "title": self.title(language),
+            "text": self.text(language, false),
+            "findings": self.findings,
+            "report": self.report,
+            "sentAt": crate::unix_now(),
+        })
+    }
+
     pub fn telegram_payload(&self, language: &str) -> (String, bool) {
         let html = self.html(language);
         if html.chars().count() <= TELEGRAM_LIMIT {
@@ -219,28 +233,34 @@ pub async fn dispatch(app: &AppHandle, settings: &Settings, alert: &Alert) {
         }
     }
 
-    let proxy = settings.proxy_url.as_deref();
+    tokio::join!(
+        to_discord(settings, alert),
+        to_telegram(settings, alert),
+        to_bale(settings, alert),
+        to_webhook(settings, alert),
+    );
+}
 
+async fn to_discord(settings: &Settings, alert: &Alert) {
     if let Some(webhook) = &settings.discord_webhook {
         let payload =
             json!({ "content": clamp(&alert.text(&settings.language, true), DISCORD_LIMIT) });
-        post(webhook, &payload, "discord", proxy).await;
+        post(
+            webhook,
+            &payload,
+            "discord",
+            Route::Proxied(settings.proxy_url.as_deref()),
+        )
+        .await;
     }
+}
 
+async fn to_telegram(settings: &Settings, alert: &Alert) {
     if settings.telegram_chat_ids.is_empty() {
         return;
     }
-
-    let token = match secrets::read(secrets::TELEGRAM_TOKEN).await {
-        Ok(Some(token)) => token,
-        Ok(None) => {
-            eprintln!("telegram chats are configured but no bot token is stored");
-            return;
-        }
-        Err(err) => {
-            eprintln!("could not read the telegram token: {err}");
-            return;
-        }
+    let Some(token) = bot_token(secrets::TELEGRAM_TOKEN, "telegram").await else {
+        return;
     };
 
     let message = Telegram {
@@ -259,6 +279,53 @@ pub async fn dispatch(app: &AppHandle, settings: &Settings, alert: &Alert) {
     while sending.join_next().await.is_some() {}
 }
 
+async fn to_bale(settings: &Settings, alert: &Alert) {
+    if settings.bale_chat_ids.is_empty() {
+        return;
+    }
+    let Some(token) = bot_token(secrets::BALE_TOKEN, "bale").await else {
+        return;
+    };
+
+    let endpoint = format!("https://tapi.bale.ai/bot{token}/sendMessage");
+    let text = clamp(&alert.text(&settings.language, false), BALE_LIMIT);
+
+    let mut sending = tokio::task::JoinSet::new();
+    for chat in settings.bale_chat_ids.clone() {
+        let endpoint = endpoint.clone();
+        let payload = json!({ "chat_id": chat, "text": text });
+        sending.spawn(async move { post(&endpoint, &payload, "bale", Route::Direct).await });
+    }
+    while sending.join_next().await.is_some() {}
+}
+
+async fn to_webhook(settings: &Settings, alert: &Alert) {
+    if let Some(url) = &settings.webhook_url {
+        let payload = alert.payload(&settings.language);
+        post(
+            url,
+            &payload,
+            "webhook",
+            Route::Proxied(settings.proxy_url.as_deref()),
+        )
+        .await;
+    }
+}
+
+async fn bot_token(key: &str, channel: &str) -> Option<String> {
+    match secrets::read(key).await {
+        Ok(Some(token)) => Some(token),
+        Ok(None) => {
+            eprintln!("{channel} chats are configured but no bot token is stored");
+            None
+        }
+        Err(err) => {
+            eprintln!("could not read the {channel} token: {err}");
+            None
+        }
+    }
+}
+
 #[derive(Clone)]
 struct Telegram {
     rich: String,
@@ -270,7 +337,7 @@ struct Telegram {
 impl Telegram {
     async fn send(&self, token: &str, chat: &str) {
         let api = format!("https://api.telegram.org/bot{token}");
-        let proxy = self.proxy.as_deref();
+        let proxy = Route::Proxied(self.proxy.as_deref());
         let rich = json!({
             "chat_id": chat,
             "rich_message": {
@@ -300,6 +367,7 @@ impl Telegram {
 fn subject(spec: &TargetSpec) -> String {
     match spec {
         TargetSpec::Website(spec) => spec.url.clone(),
+        TargetSpec::Port(spec) => spec.address(),
         TargetSpec::Server(spec) => format!("{}:{}", spec.host, spec.port),
         TargetSpec::Domain(spec) => spec.domain.clone(),
     }
@@ -307,7 +375,12 @@ fn subject(spec: &TargetSpec) -> String {
 
 fn rows(spec: &TargetSpec, status: &TargetStatus) -> Vec<Vec<String>> {
     match spec {
-        TargetSpec::Website(_) => website_rows(status),
+        TargetSpec::Website(_) => {
+            let mut table = status.website.as_ref().map(reach_rows).unwrap_or_default();
+            table.extend(dns_rows(status.dns.as_ref()));
+            table
+        }
+        TargetSpec::Port(_) => status.port.as_ref().map(reach_rows).unwrap_or_default(),
         TargetSpec::Server(spec) => status
             .server
             .as_ref()
@@ -321,10 +394,7 @@ fn rows(spec: &TargetSpec, status: &TargetStatus) -> Vec<Vec<String>> {
     }
 }
 
-fn website_rows(status: &TargetStatus) -> Vec<Vec<String>> {
-    let Some(report) = &status.website else {
-        return Vec::new();
-    };
+fn reach_rows(report: &WebsiteReport) -> Vec<Vec<String>> {
     let mut rows = vec![cells(["ORIGIN", "VANTAGE POINT", "PING", "RESULT"])];
 
     let local = &report.local;
@@ -335,6 +405,7 @@ fn website_rows(status: &TargetStatus) -> Vec<Vec<String>> {
         match (local.status, &local.error) {
             (Some(code), _) => code.to_string(),
             (None, Some(error)) => error.clone(),
+            (None, None) if local.reachable => "connected".to_owned(),
             (None, None) => "no response".to_owned(),
         },
     ]);
@@ -353,12 +424,12 @@ fn website_rows(status: &TargetStatus) -> Vec<Vec<String>> {
                 (Some(code), _, _) => code.clone(),
                 (None, Some(message), _) => message.clone(),
                 (None, None, None) => "still running".to_owned(),
+                (None, None, Some(true)) => "connected".to_owned(),
                 (None, None, _) => "no answer".to_owned(),
             },
         ]);
     }
 
-    rows.extend(dns_rows(status.dns.as_ref()));
     rows
 }
 
@@ -650,22 +721,33 @@ fn report_label(language: &str) -> &'static str {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Route<'a> {
+    Proxied(Option<&'a str>),
+    Direct,
+}
+
 async fn post(
     endpoint: &str,
     payload: &serde_json::Value,
     channel: &str,
-    proxy: Option<&str>,
+    route: Route<'_>,
 ) -> bool {
     let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15));
 
-    if let Some(url) = proxy {
-        match reqwest::Proxy::all(url) {
-            Ok(proxy) => builder = builder.proxy(proxy),
+    match route {
+        Route::Direct => builder = builder.no_proxy(),
+        Route::Proxied(None) => {}
+        Route::Proxied(Some(url)) => match reqwest::Proxy::all(url) {
+            Ok(proxy) => {
+                let local = reqwest::NoProxy::from_string("localhost,127.0.0.1,::1");
+                builder = builder.proxy(proxy.no_proxy(local));
+            }
             Err(err) => {
                 eprintln!("the {channel} proxy {url} was rejected: {err}");
                 return false;
             }
-        }
+        },
     }
 
     let client = match builder.build() {
@@ -738,6 +820,14 @@ pub fn headline(code: &str, language: &str) -> &'static str {
             "website.dnsBypass" => "با تغییر دی‌ان‌اس باز می‌شود",
             "website.dnsUnavailable" => "هیچ دی‌ان‌اسی جواب نداد",
             "website.healthy" => "سایت سالم است",
+            "port.iranAccess" => "پورت ایران‌اکسس شده است",
+            "port.blockedLocally" => "پورت از این شبکه مسدود است",
+            "port.blockedInsideIran" => "پورت از داخل ایران قابل دسترسی نیست",
+            "port.down" => "پورت بسته است یا جواب نمی‌دهد",
+            "port.ispPartial" => "بعضی اپراتورهای ایران به پورت نمی‌رسند",
+            "port.abroadPartial" => "بعضی نودهای خارج به پورت نمی‌رسند",
+            "port.externalProbeFailed" => "بررسی خارجی انجام نشد",
+            "port.healthy" => "پورت باز است",
             "server.unreachable" => "سرور پاسخ نمی‌دهد",
             "server.authenticationFailed" => "ورود SSH رد شد",
             "server.hostKeyMismatch" => "کلید میزبان تغییر کرده است",
@@ -782,6 +872,14 @@ pub fn headline(code: &str, language: &str) -> &'static str {
         "website.dnsBypass" => "Another resolver still reaches it",
         "website.dnsUnavailable" => "No resolver answered",
         "website.healthy" => "Site is healthy",
+        "port.iranAccess" => "Port is behind Iran-access isolation",
+        "port.blockedLocally" => "Port is blocked on this network",
+        "port.blockedInsideIran" => "Port is unreachable from inside Iran",
+        "port.down" => "Port is closed or not answering",
+        "port.ispPartial" => "Some Iranian ISPs cannot reach the port",
+        "port.abroadPartial" => "Some foreign vantage points cannot reach the port",
+        "port.externalProbeFailed" => "External probe unavailable",
+        "port.healthy" => "Port is open",
         "server.unreachable" => "Server is not answering",
         "server.authenticationFailed" => "SSH authentication rejected",
         "server.hostKeyMismatch" => "Host key changed",
@@ -842,6 +940,17 @@ mod tests {
             ],
             report: Some("https://check-host.net/check-report/abc".into()),
         }
+    }
+
+    #[test]
+    fn a_webhook_payload_carries_the_verdict_as_data() {
+        let payload = alert().payload("en");
+        assert_eq!(payload["target"], "softmac");
+        assert_eq!(payload["level"], "warn");
+        assert_eq!(payload["findings"][0]["code"], "website.abroadPartial");
+        assert_eq!(payload["report"], "https://check-host.net/check-report/abc");
+        assert!(payload["text"].as_str().unwrap().contains("Sao Paulo"));
+        assert!(payload["sentAt"].as_i64().unwrap() > 0);
     }
 
     #[test]

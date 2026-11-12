@@ -13,6 +13,9 @@ interface Props {
   onToggle: (target: TargetView) => void;
   onCheck: (target: TargetView) => void;
   onCheckAll: () => void;
+  silencedUntil: number | null;
+  onSilence: (until: number | null) => void;
+  onSnooze: (target: TargetView, until: number | null) => void;
 }
 
 export function Dashboard({
@@ -25,8 +28,12 @@ export function Dashboard({
   onToggle,
   onCheck,
   onCheckAll,
+  silencedUntil,
+  onSilence,
+  onSnooze,
 }: Props) {
-  const { t } = useI18n();
+  const { t, clock } = useI18n();
+  const silenced = silencedUntil !== null && silencedUntil > Date.now() / 1000;
 
   const counts = targets.reduce(
     (totals, target) => {
@@ -46,6 +53,15 @@ export function Dashboard({
 
   return (
     <div className="space-y-5">
+      {silenced ? (
+        <div className="card flex flex-wrap items-center justify-between gap-3 border-caution/40 bg-caution/5 px-4 py-3">
+          <p className="text-sm text-ink">
+            {t("snooze.allUntil", { time: clock(silencedUntil) })}
+          </p>
+          <Button onClick={() => onSilence(null)}>{t("snooze.resume")}</Button>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
           {cards.map((card) => (
@@ -58,6 +74,11 @@ export function Dashboard({
           ))}
         </div>
         <div className="flex gap-2">
+          {!silenced ? (
+            <Button onClick={() => onSilence(Math.floor(Date.now() / 1000) + 3600)}>
+              {t("snooze.allHour")}
+            </Button>
+          ) : null}
           <Button onClick={onCheckAll} disabled={targets.length === 0}>
             {t("action.checkAll")}
           </Button>
@@ -75,6 +96,7 @@ export function Dashboard({
         onDelete={onDelete}
         onToggle={onToggle}
         onCheck={onCheck}
+        onSnooze={onSnooze}
       />
     </div>
   );

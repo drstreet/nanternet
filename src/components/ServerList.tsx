@@ -36,7 +36,10 @@ interface Props {
   onDelete: (target: TargetView) => void;
   onToggle: (target: TargetView) => void;
   onCheck: (target: TargetView) => void;
+  onSnooze: (target: TargetView, until: number | null) => void;
 }
+
+const SNOOZES = [3600, 4 * 3600, 24 * 3600];
 
 export function ServerList({
   targets,
@@ -46,8 +49,9 @@ export function ServerList({
   onDelete,
   onToggle,
   onCheck,
+  onSnooze,
 }: Props) {
-  const { t, relative } = useI18n();
+  const { t, relative, clock } = useI18n();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   if (targets.length === 0) {
@@ -65,6 +69,7 @@ export function ServerList({
         const status = statuses[target.id];
         const level = status?.level ?? "unknown";
         const open = expanded === target.id;
+        const snoozed = target.snoozedUntil !== null && target.snoozedUntil > Date.now() / 1000;
 
         return (
           <li key={target.id} className="card overflow-hidden">
@@ -81,6 +86,9 @@ export function ServerList({
                     <KindTag kind={target.spec.kind} />
                     {!target.enabled ? (
                       <span className="text-xs text-ink-faint">{t("list.paused")}</span>
+                    ) : null}
+                    {target.enabled && snoozed ? (
+                      <span className="text-xs text-caution">{t("snooze.tag")}</span>
                     ) : null}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-xs text-ink-faint">
@@ -109,6 +117,7 @@ export function ServerList({
                 <History id={target.id} checkedAt={status?.checkedAt} />
 
                 {status?.website ? <WebsiteDetail report={status.website} /> : null}
+                {status?.port ? <WebsiteDetail report={status.port} /> : null}
                 {status?.dns ? <DnsDetail report={status.dns} /> : null}
                 {status?.server ? <ServerDetail report={status.server} /> : null}
                 {status?.domain ? <DomainDetail report={status.domain} /> : null}
@@ -118,7 +127,36 @@ export function ServerList({
                     {status ? <Freshness status={status} /> : t("status.never")} ·{" "}
                     {interval(target.intervalSecs)}
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {snoozed && target.snoozedUntil !== null ? (
+                      <>
+                        <span className="text-xs text-caution">
+                          {t("snooze.until", { time: clock(target.snoozedUntil) })}
+                        </span>
+                        <Button onClick={() => onSnooze(target, null)}>{t("snooze.resume")}</Button>
+                      </>
+                    ) : (
+                      <select
+                        className="field w-auto py-1.5 text-sm"
+                        value=""
+                        aria-label={t("snooze.pick")}
+                        onChange={(event) =>
+                          onSnooze(
+                            target,
+                            Math.floor(Date.now() / 1000) + Number(event.target.value),
+                          )
+                        }
+                      >
+                        <option value="" disabled>
+                          {t("snooze.pick")}
+                        </option>
+                        {SNOOZES.map((seconds) => (
+                          <option key={seconds} value={seconds}>
+                            {t("time.hours", { count: seconds / 3600 })}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <Button onClick={() => onToggle(target)}>
                       {target.enabled ? t("action.pause") : t("action.resume")}
                     </Button>
@@ -199,11 +237,56 @@ function History({ id, checkedAt }: { id: string; checkedAt?: number }) {
           />
         ))}
       </div>
+      <LatencyChart samples={lastDay} start={start} />
       <div className="mt-1 flex justify-between text-xs text-ink-faint" dir="ltr">
         <span>{t("history.dayAgo")}</span>
         <span>{t("history.now")}</span>
       </div>
     </section>
+  );
+}
+
+function LatencyChart({ samples, start }: { samples: Sample[]; start: number }) {
+  const { t } = useI18n();
+  const timed = samples.filter(
+    (sample): sample is Sample & { latencyMs: number } => sample.latencyMs !== undefined,
+  );
+  if (timed.length < 2) return null;
+
+  const sorted = timed.map((sample) => sample.latencyMs).sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const peak = sorted[sorted.length - 1];
+  const ceiling = Math.max(peak, 1);
+  const points = timed
+    .map((sample) => {
+      const x = ((sample.checkedAt - start) / DAY) * 1000;
+      const y = 46 - (sample.latencyMs / ceiling) * 42;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="mt-3">
+      <p className="mb-1 font-mono text-xs text-ink-faint">
+        {t("history.latency", { median, peak })}
+      </p>
+      <svg
+        viewBox="0 0 1000 48"
+        preserveAspectRatio="none"
+        className="h-12 w-full text-brand"
+        role="img"
+        aria-label={t("history.latency", { median, peak })}
+      >
+        <polyline
+          points={points}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    </div>
   );
 }
 
@@ -245,9 +328,11 @@ function WebsiteDetail({ report }: { report: WebsiteReport }) {
       <section>
         <h4 className="label">{t("status.localNetwork")}</h4>
         <p className="font-mono text-sm text-ink">
-          {report.local.reachable
-            ? `HTTP ${report.local.status ?? "?"} · ${report.local.latencyMs ?? "?"} ms`
-            : (report.local.error ?? t("status.unreachable"))}
+          {!report.local.reachable
+            ? (report.local.error ?? t("status.unreachable"))
+            : report.local.status !== null
+              ? `HTTP ${report.local.status} · ${report.local.latencyMs ?? "?"} ms`
+              : `${t("status.connected")} · ${report.local.latencyMs ?? "?"} ms`}
         </p>
       </section>
 
@@ -307,7 +392,7 @@ function NodeGroup({ title, nodes }: { title: string; nodes: NodeResult[] }) {
             {node.reachable === null
               ? t("status.pendingNode")
               : node.reachable
-                ? `${node.status ?? "ok"} · ${node.latencyMs ?? "?"} ms`
+                ? `${node.status ?? t("status.connected")} · ${node.latencyMs ?? "?"} ms`
                 : (node.message ?? t("status.unreachable"))}
           </span>
         </li>
@@ -486,6 +571,10 @@ function endpointOf(target: TargetView): string {
   switch (target.spec.kind) {
     case "website":
       return target.spec.url;
+    case "port":
+      return target.spec.host.includes(":")
+        ? `[${target.spec.host}]:${target.spec.port}`
+        : `${target.spec.host}:${target.spec.port}`;
     case "server":
       return `${target.spec.username}@${target.spec.host}:${target.spec.port}`;
     case "domain":

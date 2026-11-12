@@ -39,6 +39,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             None,
@@ -63,6 +65,8 @@ pub fn run() {
             commands::delete_target,
             commands::set_target_enabled,
             commands::check_now,
+            commands::snooze_target,
+            commands::snooze_alerts,
             commands::get_history,
             commands::get_settings,
             commands::save_settings,

@@ -22,6 +22,18 @@ export interface WebsiteSpec {
   abroadAlertThreshold: number;
 }
 
+export interface PortSpec {
+  kind: "port";
+  host: string;
+  port: number;
+  externalProbe: boolean;
+  externalIntervalSecs: number;
+  iranNodes: number;
+  abroadNodes: number;
+  iranAlertThreshold: number;
+  abroadAlertThreshold: number;
+}
+
 export type SshAuth = { method: "key"; path: string } | { method: "password" };
 
 export interface ServerSpec {
@@ -47,7 +59,7 @@ export interface DomainSpec {
   warnDays: number;
 }
 
-export type TargetSpec = WebsiteSpec | ServerSpec | DomainSpec;
+export type TargetSpec = WebsiteSpec | PortSpec | ServerSpec | DomainSpec;
 
 export type TargetKind = TargetSpec["kind"];
 
@@ -59,6 +71,7 @@ export interface Target {
   enabled: boolean;
   intervalSecs: number;
   alerts: AlertLevel | null;
+  snoozedUntil: number | null;
   spec: TargetSpec;
 }
 
@@ -164,6 +177,7 @@ export interface Sample {
   checkedAt: number;
   level: Level;
   durationMs: number;
+  latencyMs?: number;
 }
 
 export interface TargetStatus {
@@ -173,6 +187,7 @@ export interface TargetStatus {
   durationMs: number;
   findings: Finding[];
   website?: WebsiteReport;
+  port?: WebsiteReport;
   server?: ServerReport;
   domain?: DomainReport;
   dns?: DnsReport;
@@ -184,12 +199,21 @@ export interface Settings {
   alerts: AlertLevel;
   discordWebhook: string | null;
   telegramChatIds: string[];
+  baleChatIds: string[];
+  webhookUrl: string | null;
   proxyUrl: string | null;
   dnsResolvers: string[];
   confirmations: number;
   startAtLogin: boolean;
+  snoozedUntil: number | null;
 }
 
 export interface SettingsView extends Settings {
   telegramTokenStored: boolean;
+  baleTokenStored: boolean;
+}
+
+export interface BotTokens {
+  telegram?: string;
+  bale?: string;
 }

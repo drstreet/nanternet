@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-import type { Sample, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
+import type { BotTokens, Sample, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
 
 const STATUS_EVENT = "target://status";
+const SETTINGS_EVENT = "settings://changed";
 
 export const listTargets = () => invoke<TargetView[]>("list_targets");
 
@@ -17,6 +18,14 @@ export const deleteTarget = (id: string) => invoke<void>("delete_target", { id }
 export const setTargetEnabled = (id: string, enabled: boolean) =>
   invoke<void>("set_target_enabled", { id, enabled });
 
+export const snoozeTarget = (id: string, until: number | null) =>
+  invoke<void>("snooze_target", { id, until });
+
+export const snoozeAlerts = (until: number | null) => invoke<void>("snooze_alerts", { until });
+
+export const onSettingsChanged = (handler: () => void) =>
+  listen<number | null>(SETTINGS_EVENT, () => handler());
+
 export const checkNow = (id: string) => invoke<TargetStatus>("check_now", { id });
 
 export const getHistory = (id: string, since: number) =>
@@ -24,8 +33,12 @@ export const getHistory = (id: string, since: number) =>
 
 export const getSettings = () => invoke<SettingsView>("get_settings");
 
-export const saveSettings = (settings: Settings, telegramToken?: string) =>
-  invoke<Settings>("save_settings", { settings, telegramToken: telegramToken ?? null });
+export const saveSettings = (settings: Settings, tokens: BotTokens) =>
+  invoke<Settings>("save_settings", {
+    settings,
+    telegramToken: tokens.telegram ?? null,
+    baleToken: tokens.bale ?? null,
+  });
 
 export const sendTestNotification = () => invoke<void>("send_test_notification");
 
