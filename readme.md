@@ -118,6 +118,11 @@ an interrupted save cannot truncate the file:
 - Linux `~/.config/net.nanternet.monitor/targets.json`
 - Windows `%APPDATA%\net.nanternet.monitor\targets.json`
 
+Every check is also appended to `history/<target id>.jsonl` in the same directory, one JSON line per
+check. The expanded view of a target draws the last 24 hours from it, along with uptime over 24 hours
+and 7 days. Samples older than 30 days are dropped once a day, and deleting a target deletes its
+history.
+
 SSH passwords, key passphrases and the Telegram bot token never touch that file. They go to the
 operating system credential store: Keychain on macOS, Credential Manager on Windows, Secret Service
 on Linux.
@@ -158,6 +163,7 @@ src-tauri/src/
   cert_watch.rs         TLS handshake inspection, RDAP and whois
   notification_engine.rs  desktop, Discord and Telegram delivery
   scheduler.rs          due-time loop, alert transitions
+  history.rs            per-target check history on disk
   secrets.rs            OS credential store
 ```
 

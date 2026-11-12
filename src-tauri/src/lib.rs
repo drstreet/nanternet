@@ -5,6 +5,7 @@ mod config;
 mod dns_probe;
 mod docker_monitor;
 mod error;
+mod history;
 mod network_checker;
 mod notification_engine;
 mod scheduler;
@@ -62,6 +63,7 @@ pub fn run() {
             commands::delete_target,
             commands::set_target_enabled,
             commands::check_now,
+            commands::get_history,
             commands::get_settings,
             commands::save_settings,
             commands::send_test_notification,

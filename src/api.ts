@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-import type { Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
+import type { Sample, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
 
 const STATUS_EVENT = "target://status";
 
@@ -18,6 +18,9 @@ export const setTargetEnabled = (id: string, enabled: boolean) =>
   invoke<void>("set_target_enabled", { id, enabled });
 
 export const checkNow = (id: string) => invoke<TargetStatus>("check_now", { id });
+
+export const getHistory = (id: string, since: number) =>
+  invoke<Sample[]>("get_history", { id, since });
 
 export const getSettings = () => invoke<SettingsView>("get_settings");
 

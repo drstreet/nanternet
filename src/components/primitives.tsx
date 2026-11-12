@@ -10,7 +10,7 @@ const levelTone: Record<Level, string> = {
   unknown: "border-hairline bg-surface-sunken text-ink-faint",
 };
 
-const levelDot: Record<Level, string> = {
+export const levelDot: Record<Level, string> = {
   ok: "bg-good",
   warn: "bg-caution",
   critical: "bg-bad",

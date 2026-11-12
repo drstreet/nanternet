@@ -160,6 +160,12 @@ export interface DomainReport {
   registrationError: string | null;
 }
 
+export interface Sample {
+  checkedAt: number;
+  level: Level;
+  durationMs: number;
+}
+
 export interface TargetStatus {
   targetId: string;
   level: Level;

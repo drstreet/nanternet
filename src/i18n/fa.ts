@@ -96,6 +96,11 @@ export const fa: Dictionary = {
   "auth.keepStored": "برای حفظ رمز ذخیره‌شده این فیلد را خالی بگذارید.",
   "auth.clearStored": "برای پاک کردن رمز ذخیره‌شده یک فاصله بنویسید و ذخیره کنید.",
 
+  "history.title": "۲۴ ساعت گذشته",
+  "history.uptime": "دسترس‌پذیری ۲۴ ساعت {day} · ۷ روز {week}",
+  "history.dayAgo": "۲۴ ساعت پیش",
+  "history.now": "اکنون",
+
   "status.lastChecked": "بررسی {ago}",
   "status.never": "هنوز بررسی نشده",
   "status.took": "{ms} میلی‌ثانیه",
