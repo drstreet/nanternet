@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-import type { Sample, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
+import type { BotTokens, Sample, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
 
 const STATUS_EVENT = "target://status";
 
@@ -24,8 +24,12 @@ export const getHistory = (id: string, since: number) =>
 
 export const getSettings = () => invoke<SettingsView>("get_settings");
 
-export const saveSettings = (settings: Settings, telegramToken?: string) =>
-  invoke<Settings>("save_settings", { settings, telegramToken: telegramToken ?? null });
+export const saveSettings = (settings: Settings, tokens: BotTokens) =>
+  invoke<Settings>("save_settings", {
+    settings,
+    telegramToken: tokens.telegram ?? null,
+    baleToken: tokens.bale ?? null,
+  });
 
 export const sendTestNotification = () => invoke<void>("send_test_notification");
 

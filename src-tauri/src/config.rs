@@ -10,6 +10,7 @@ pub const MIN_EXTERNAL_INTERVAL: u64 = 300;
 pub const MAX_PROBE_NODES: usize = 8;
 pub const REGISTRATION_INTERVAL: u64 = 43_200;
 pub const MAX_TELEGRAM_CHATS: usize = 32;
+pub const MAX_BALE_CHATS: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -267,6 +268,10 @@ pub struct Settings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub telegram_chat_id: Option<String>,
     #[serde(default)]
+    pub bale_chat_ids: Vec<String>,
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+    #[serde(default)]
     pub proxy_url: Option<String>,
     #[serde(default)]
     pub dns_resolvers: Vec<String>,
@@ -285,6 +290,8 @@ impl Default for Settings {
             discord_webhook: None,
             telegram_chat_ids: Vec::new(),
             telegram_chat_id: None,
+            bale_chat_ids: Vec::new(),
+            webhook_url: None,
             proxy_url: None,
             dns_resolvers: Vec::new(),
             confirmations: default_confirmations(),
@@ -301,18 +308,13 @@ impl Settings {
         self.confirmations = self.confirmations.clamp(1, 10);
         blank_to_none(&mut self.discord_webhook);
         blank_to_none(&mut self.proxy_url);
+        blank_to_none(&mut self.webhook_url);
 
         if let Some(single) = self.telegram_chat_id.take() {
             self.telegram_chat_ids.insert(0, single);
         }
-        let mut seen = std::collections::HashSet::new();
-        self.telegram_chat_ids = self
-            .telegram_chat_ids
-            .iter()
-            .map(|entry| entry.trim().to_owned())
-            .filter(|entry| !entry.is_empty() && seen.insert(entry.clone()))
-            .collect();
-        self.telegram_chat_ids.truncate(MAX_TELEGRAM_CHATS);
+        tidy_chats(&mut self.telegram_chat_ids, MAX_TELEGRAM_CHATS);
+        tidy_chats(&mut self.bale_chat_ids, MAX_BALE_CHATS);
 
         self.dns_resolvers = self
             .dns_resolvers
@@ -322,6 +324,16 @@ impl Settings {
             .collect();
         self.dns_resolvers.truncate(crate::dns_probe::MAX_RESOLVERS);
     }
+}
+
+fn tidy_chats(chats: &mut Vec<String>, limit: usize) {
+    let mut seen = std::collections::HashSet::new();
+    *chats = chats
+        .iter()
+        .map(|entry| entry.trim().to_owned())
+        .filter(|entry| !entry.is_empty() && seen.insert(entry.clone()))
+        .collect();
+    chats.truncate(limit);
 }
 
 fn blank_to_none(value: &mut Option<String>) {
@@ -414,10 +426,14 @@ mod tests {
                 "-100111".into(),
                 "@channel".into(),
             ],
+            bale_chat_ids: vec![" 4242 ".into(), "4242".into()],
+            webhook_url: Some("   ".into()),
             ..Settings::default()
         };
         settings.normalize();
         assert_eq!(settings.telegram_chat_ids, ["-100111", "@channel"]);
+        assert_eq!(settings.bale_chat_ids, ["4242"]);
+        assert_eq!(settings.webhook_url, None);
     }
 
     #[test]

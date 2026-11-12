@@ -2,29 +2,38 @@ import { useEffect, useState } from "react";
 
 import { sendTestNotification } from "../api";
 import { useI18n } from "../i18n";
-import type { AlertLevel, Language, Settings as SettingsShape, SettingsView } from "../types";
+import type {
+  AlertLevel,
+  BotTokens,
+  Language,
+  Settings as SettingsShape,
+  SettingsView,
+} from "../types";
 import { Button, Toggle, lines } from "./primitives";
 
 export const ALERT_LEVELS: AlertLevel[] = ["all", "problems", "critical", "off"];
 
 interface Props {
   settings: SettingsView;
-  onSave: (settings: SettingsShape, telegramToken?: string) => Promise<boolean>;
+  onSave: (settings: SettingsShape, tokens: BotTokens) => Promise<boolean>;
 }
 
 export function Settings({ settings, onSave }: Props) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<SettingsShape>(settings);
   const [telegramToken, setTelegramToken] = useState("");
+  const [baleToken, setBaleToken] = useState("");
 
   const [resolvers, setResolvers] = useState(settings.dnsResolvers.join("\n"));
   const [chats, setChats] = useState(settings.telegramChatIds.join("\n"));
+  const [baleChats, setBaleChats] = useState(settings.baleChatIds.join("\n"));
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setDraft(settings);
     setResolvers(settings.dnsResolvers.join("\n"));
     setChats(settings.telegramChatIds.join("\n"));
+    setBaleChats(settings.baleChatIds.join("\n"));
   }, [settings]);
 
   const patch = <K extends keyof SettingsShape>(key: K, value: SettingsShape[K]) => {
@@ -37,9 +46,15 @@ export function Settings({ settings, onSave }: Props) {
       ...draft,
       dnsResolvers: lines(resolvers),
       telegramChatIds: lines(chats),
+      baleChatIds: lines(baleChats),
     };
-    if (!(await onSave(next, telegramToken.length > 0 ? telegramToken : undefined))) return;
+    const tokens: BotTokens = {
+      telegram: telegramToken.length > 0 ? telegramToken : undefined,
+      bale: baleToken.length > 0 ? baleToken : undefined,
+    };
+    if (!(await onSave(next, tokens))) return;
     setTelegramToken("");
+    setBaleToken("");
     setSaved(true);
   };
 
@@ -154,6 +169,59 @@ export function Settings({ settings, onSave }: Props) {
               </p>
             ) : null}
           </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="settings-bale-chat">
+              {t("settings.baleChat")}
+            </label>
+            <textarea
+              id="settings-bale-chat"
+              rows={3}
+              className="field font-mono"
+              placeholder="4012345678&#10;@mychannel"
+              value={baleChats}
+              onChange={(event) => {
+                setSaved(false);
+                setBaleChats(event.target.value);
+              }}
+            />
+            <p className="hint">{t("settings.baleChat.hint")}</p>
+          </div>
+          <div>
+            <label className="label" htmlFor="settings-bale-token">
+              {t("settings.baleToken")}
+            </label>
+            <input
+              id="settings-bale-token"
+              type="password"
+              className="field font-mono"
+              autoComplete="off"
+              value={baleToken}
+              onChange={(event) => setBaleToken(event.target.value)}
+            />
+            {settings.baleTokenStored ? (
+              <p className="hint">
+                {`${t("settings.baleToken.stored")} ${t("auth.keepStored")}`}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="settings-webhook">
+            {t("settings.webhook")}
+          </label>
+          <input
+            id="settings-webhook"
+            type="url"
+            className="field font-mono"
+            placeholder="https://ntfy.sh/…"
+            value={draft.webhookUrl ?? ""}
+            onChange={(event) => patch("webhookUrl", event.target.value || null)}
+          />
+          <p className="hint">{t("settings.webhook.hint")}</p>
         </div>
 
         <div>

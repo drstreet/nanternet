@@ -184,6 +184,8 @@ export interface Settings {
   alerts: AlertLevel;
   discordWebhook: string | null;
   telegramChatIds: string[];
+  baleChatIds: string[];
+  webhookUrl: string | null;
   proxyUrl: string | null;
   dnsResolvers: string[];
   confirmations: number;
@@ -192,4 +194,10 @@ export interface Settings {
 
 export interface SettingsView extends Settings {
   telegramTokenStored: boolean;
+  baleTokenStored: boolean;
+}
+
+export interface BotTokens {
+  telegram?: string;
+  bale?: string;
 }

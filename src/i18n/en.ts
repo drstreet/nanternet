@@ -145,7 +145,7 @@ export const en = {
     "One per line, up to 32. Use a numeric ID such as -1001234567890 for a group or channel, your own numeric ID for a private chat, or a public @name. Every alert goes to all of them at once.",
   "settings.alerts": "Notify me about",
   "settings.alerts.hint":
-    "Applies to desktop, Discord and Telegram alike. Individual targets can override it. Note that a return to healthy is itself an event, so silencing it means no recovery notice either.",
+    "Applies to every channel alike. Individual targets can override it. Note that a return to healthy is itself an event, so silencing it means no recovery notice either.",
   "alerts.all": "Everything, including recoveries",
   "alerts.problems": "Warnings and worse",
   "alerts.critical": "Critical only",
@@ -153,6 +153,14 @@ export const en = {
   "alerts.inherit": "Whatever the global setting says",
   "settings.telegramToken": "Telegram bot token",
   "settings.telegramToken.stored": "A bot token is stored in the system keychain.",
+  "settings.baleChat": "Bale chats and channels",
+  "settings.baleChat.hint":
+    "One per line, up to 32, as a numeric ID or a public @name. Bale is reachable inside Iran, so these alerts go out directly and still arrive when the tunnel is down.",
+  "settings.baleToken": "Bale bot token",
+  "settings.baleToken.stored": "A Bale bot token is stored in the system keychain.",
+  "settings.webhook": "Webhook URL",
+  "settings.webhook.hint":
+    "Every alert is POSTed here as JSON with the target, level, findings and a ready-made text field, which is enough for ntfy, Slack, n8n or your own script. It goes through the alert proxy when one is set, except for addresses on this machine.",
   "settings.proxy": "Proxy for alerts",
   "settings.proxy.hint":
     "Telegram and Discord are blocked in Iran, so alerts need a way out. Point this at the local inbound your v2ray, Xray or Hiddify client already listens on, usually socks5h://127.0.0.1:10808. Accepts http, https, socks5 and socks5h. Site checks ignore it on purpose, otherwise they would measure the tunnel instead of your network.",

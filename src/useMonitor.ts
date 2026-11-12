@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import * as api from "./api";
-import type { Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
+import type { BotTokens, Settings, SettingsView, Target, TargetStatus, TargetView } from "./types";
 
 const FAILED = Symbol("failed");
 
@@ -97,8 +97,8 @@ export function useMonitor() {
   }, [check, targets]);
 
   const updateSettings = useCallback(
-    async (next: Settings, telegramToken?: string) => {
-      if ((await attempt(() => api.saveSettings(next, telegramToken))) === FAILED) return false;
+    async (next: Settings, tokens: BotTokens) => {
+      if ((await attempt(() => api.saveSettings(next, tokens))) === FAILED) return false;
       await reload();
       return true;
     },

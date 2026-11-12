@@ -11,6 +11,7 @@ use crate::status::{
 
 const DISCORD_LIMIT: usize = 1900;
 const TELEGRAM_LIMIT: usize = 3900;
+const BALE_LIMIT: usize = 3900;
 const DETAIL_LIMIT: usize = 160;
 const MAX_LINES: usize = 8;
 const MAX_ROWS: usize = 16;
@@ -196,6 +197,19 @@ impl Alert {
         self.grid().map(|rows| table(&rows))
     }
 
+    pub fn payload(&self, language: &str) -> serde_json::Value {
+        json!({
+            "target": self.target,
+            "subject": self.subject,
+            "level": self.level,
+            "title": self.title(language),
+            "text": self.text(language, false),
+            "findings": self.findings,
+            "report": self.report,
+            "sentAt": crate::unix_now(),
+        })
+    }
+
     pub fn telegram_payload(&self, language: &str) -> (String, bool) {
         let html = self.html(language);
         if html.chars().count() <= TELEGRAM_LIMIT {
@@ -219,28 +233,28 @@ pub async fn dispatch(app: &AppHandle, settings: &Settings, alert: &Alert) {
         }
     }
 
-    let proxy = settings.proxy_url.as_deref();
+    tokio::join!(
+        to_discord(settings, alert),
+        to_telegram(settings, alert),
+        to_bale(settings, alert),
+        to_webhook(settings, alert),
+    );
+}
 
+async fn to_discord(settings: &Settings, alert: &Alert) {
     if let Some(webhook) = &settings.discord_webhook {
         let payload =
             json!({ "content": clamp(&alert.text(&settings.language, true), DISCORD_LIMIT) });
-        post(webhook, &payload, "discord", proxy).await;
+        post(webhook, &payload, "discord", settings.proxy_url.as_deref()).await;
     }
+}
 
+async fn to_telegram(settings: &Settings, alert: &Alert) {
     if settings.telegram_chat_ids.is_empty() {
         return;
     }
-
-    let token = match secrets::read(secrets::TELEGRAM_TOKEN).await {
-        Ok(Some(token)) => token,
-        Ok(None) => {
-            eprintln!("telegram chats are configured but no bot token is stored");
-            return;
-        }
-        Err(err) => {
-            eprintln!("could not read the telegram token: {err}");
-            return;
-        }
+    let Some(token) = bot_token(secrets::TELEGRAM_TOKEN, "telegram").await else {
+        return;
     };
 
     let message = Telegram {
@@ -257,6 +271,47 @@ pub async fn dispatch(app: &AppHandle, settings: &Settings, alert: &Alert) {
         sending.spawn(async move { message.send(&token, &chat).await });
     }
     while sending.join_next().await.is_some() {}
+}
+
+async fn to_bale(settings: &Settings, alert: &Alert) {
+    if settings.bale_chat_ids.is_empty() {
+        return;
+    }
+    let Some(token) = bot_token(secrets::BALE_TOKEN, "bale").await else {
+        return;
+    };
+
+    let endpoint = format!("https://tapi.bale.ai/bot{token}/sendMessage");
+    let text = clamp(&alert.text(&settings.language, false), BALE_LIMIT);
+
+    let mut sending = tokio::task::JoinSet::new();
+    for chat in settings.bale_chat_ids.clone() {
+        let endpoint = endpoint.clone();
+        let payload = json!({ "chat_id": chat, "text": text });
+        sending.spawn(async move { post(&endpoint, &payload, "bale", None).await });
+    }
+    while sending.join_next().await.is_some() {}
+}
+
+async fn to_webhook(settings: &Settings, alert: &Alert) {
+    if let Some(url) = &settings.webhook_url {
+        let payload = alert.payload(&settings.language);
+        post(url, &payload, "webhook", settings.proxy_url.as_deref()).await;
+    }
+}
+
+async fn bot_token(key: &str, channel: &str) -> Option<String> {
+    match secrets::read(key).await {
+        Ok(Some(token)) => Some(token),
+        Ok(None) => {
+            eprintln!("{channel} chats are configured but no bot token is stored");
+            None
+        }
+        Err(err) => {
+            eprintln!("could not read the {channel} token: {err}");
+            None
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -660,7 +715,10 @@ async fn post(
 
     if let Some(url) = proxy {
         match reqwest::Proxy::all(url) {
-            Ok(proxy) => builder = builder.proxy(proxy),
+            Ok(proxy) => {
+                let local = reqwest::NoProxy::from_string("localhost,127.0.0.1,::1");
+                builder = builder.proxy(proxy.no_proxy(local));
+            }
             Err(err) => {
                 eprintln!("the {channel} proxy {url} was rejected: {err}");
                 return false;
@@ -842,6 +900,17 @@ mod tests {
             ],
             report: Some("https://check-host.net/check-report/abc".into()),
         }
+    }
+
+    #[test]
+    fn a_webhook_payload_carries_the_verdict_as_data() {
+        let payload = alert().payload("en");
+        assert_eq!(payload["target"], "softmac");
+        assert_eq!(payload["level"], "warn");
+        assert_eq!(payload["findings"][0]["code"], "website.abroadPartial");
+        assert_eq!(payload["report"], "https://check-host.net/check-report/abc");
+        assert!(payload["text"].as_str().unwrap().contains("Sao Paulo"));
+        assert!(payload["sentAt"].as_i64().unwrap() > 0);
     }
 
     #[test]

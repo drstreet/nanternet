@@ -22,6 +22,7 @@ pub struct SettingsView {
     #[serde(flatten)]
     settings: Settings,
     telegram_token_stored: bool,
+    bale_token_stored: bool,
 }
 
 #[tauri::command]
@@ -139,6 +140,7 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsView> {
     Ok(SettingsView {
         settings: state.settings().await,
         telegram_token_stored: secrets::exists(secrets::TELEGRAM_TOKEN).await,
+        bale_token_stored: secrets::exists(secrets::BALE_TOKEN).await,
     })
 }
 
@@ -148,17 +150,17 @@ pub async fn save_settings(
     state: State<'_, AppState>,
     mut settings: Settings,
     telegram_token: Option<String>,
+    bale_token: Option<String>,
 ) -> Result<Settings> {
     settings.normalize();
     check_proxy(settings.proxy_url.as_deref())?;
     check_resolvers(&settings.dns_resolvers)?;
     check_chats(&settings.telegram_chat_ids)?;
+    check_chats(&settings.bale_chat_ids)?;
+    check_webhook(settings.webhook_url.as_deref())?;
 
-    match telegram_token.as_deref().map(str::trim) {
-        Some("") => secrets::forget(secrets::TELEGRAM_TOKEN).await?,
-        Some(token) => secrets::store(secrets::TELEGRAM_TOKEN, token).await?,
-        None => {}
-    }
+    remember_token(secrets::TELEGRAM_TOKEN, telegram_token.as_deref()).await?;
+    remember_token(secrets::BALE_TOKEN, bale_token.as_deref()).await?;
 
     let launcher = app.autolaunch();
     let already = launcher.is_enabled().unwrap_or(false);
@@ -212,6 +214,30 @@ fn check_proxy(url: Option<&str>) -> Result<()> {
     match parsed.host_str() {
         Some(_) => Ok(()),
         None => Err(Error::msg("that proxy address has no host")),
+    }
+}
+
+async fn remember_token(key: &str, token: Option<&str>) -> Result<()> {
+    match token.map(str::trim) {
+        Some("") => secrets::forget(key).await,
+        Some(token) => secrets::store(key, token).await,
+        None => Ok(()),
+    }
+}
+
+fn check_webhook(url: Option<&str>) -> Result<()> {
+    let Some(url) = url else {
+        return Ok(());
+    };
+    let usable = reqwest::Url::parse(url).is_ok_and(|parsed| {
+        matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some()
+    });
+    if usable {
+        Ok(())
+    } else {
+        Err(Error::msg(format!(
+            "{url:?} is not a web address; a webhook must start with https:// or http://"
+        )))
     }
 }
 
