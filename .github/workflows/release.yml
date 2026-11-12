@@ -54,4 +54,4 @@ jobs:
           args: --target ${{ matrix.target }}
           tagName: ${{ github.ref_name }}
           releaseName: IranNANternet ${{ github.ref_name }}
-          releaseDraft: true
+          releaseDraft: false
