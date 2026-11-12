@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
+import { getHistory } from "../api";
 import { useI18n } from "../i18n";
 import type {
   DnsReport,
   DomainReport,
   Finding,
+  Level,
   NodeResult,
+  Sample,
   ServerReport,
   TargetStatus,
   TargetView,
@@ -22,6 +25,7 @@ import {
   bytes,
   duration,
   interval,
+  levelDot,
 } from "./primitives";
 
 interface Props {
@@ -102,6 +106,7 @@ export function ServerList({
             {open ? (
               <div className="border-t border-hairline bg-surface-sunken/60 px-4 py-4">
                 <Findings findings={status?.findings ?? []} />
+                <History id={target.id} checkedAt={status?.checkedAt} />
 
                 {status?.website ? <WebsiteDetail report={status.website} /> : null}
                 {status?.dns ? <DnsDetail report={status.dns} /> : null}
@@ -139,6 +144,66 @@ function Freshness({ status }: { status: TargetStatus }) {
       {t("status.lastChecked", { ago: relative(status.checkedAt) })} ·{" "}
       {t("status.took", { ms: status.durationMs })}
     </>
+  );
+}
+
+const DAY = 86_400;
+const BUCKETS = 48;
+const severity: Record<Level, number> = { unknown: 0, ok: 1, warn: 2, critical: 3 };
+
+function uptime(samples: Sample[]): string {
+  const known = samples.filter((sample) => sample.level !== "unknown");
+  if (known.length === 0) return "—";
+  const up = known.filter((sample) => sample.level !== "critical").length;
+  return `${((up / known.length) * 100).toFixed(1)}%`;
+}
+
+function History({ id, checkedAt }: { id: string; checkedAt?: number }) {
+  const { t } = useI18n();
+  const [samples, setSamples] = useState<Sample[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    getHistory(id, Math.floor(Date.now() / 1000) - 7 * DAY)
+      .then((loaded) => live && setSamples(loaded))
+      .catch(() => live && setSamples([]));
+    return () => {
+      live = false;
+    };
+  }, [id, checkedAt]);
+
+  if (samples.length === 0) return null;
+
+  const start = Math.floor(Date.now() / 1000) - DAY;
+  const lastDay = samples.filter((sample) => sample.checkedAt >= start);
+  const buckets: Level[] = Array(BUCKETS).fill("unknown");
+  for (const sample of lastDay) {
+    const index = Math.min(BUCKETS - 1, Math.floor((sample.checkedAt - start) / (DAY / BUCKETS)));
+    if (severity[sample.level] > severity[buckets[index]]) buckets[index] = sample.level;
+  }
+
+  return (
+    <section className="mt-4">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="label mb-0">{t("history.title")}</h4>
+        <span className="font-mono text-xs text-ink-faint">
+          {t("history.uptime", { day: uptime(lastDay), week: uptime(samples) })}
+        </span>
+      </div>
+      <div className="flex h-6 gap-px" dir="ltr">
+        {buckets.map((level, index) => (
+          <span
+            key={index}
+            title={t(`level.${level}`)}
+            className={`flex-1 rounded-sm ${level === "unknown" ? "bg-hairline" : levelDot[level]}`}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-xs text-ink-faint" dir="ltr">
+        <span>{t("history.dayAgo")}</span>
+        <span>{t("history.now")}</span>
+      </div>
+    </section>
   );
 }
 

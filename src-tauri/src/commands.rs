@@ -6,7 +6,7 @@ use crate::config::{Settings, Target, TargetSpec};
 use crate::error::{Error, Result};
 use crate::state::AppState;
 use crate::status::TargetStatus;
-use crate::{notification_engine, scheduler, secrets};
+use crate::{history, notification_engine, scheduler, secrets};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -90,6 +90,8 @@ pub async fn delete_target(state: State<'_, AppState>, id: String) -> Result<()>
         .await?;
     secrets::forget(&secrets::target_key(&id)).await?;
     state.forget(&id).await;
+    let dir = state.history_dir();
+    tauri::async_runtime::spawn_blocking(move || history::remove(&dir, &id)).await?;
     Ok(())
 }
 
@@ -120,6 +122,16 @@ pub async fn check_now(app: AppHandle, id: String) -> Result<TargetStatus> {
         .await
         .ok_or_else(|| Error::msg("that target no longer exists"))?;
     scheduler::visit(app, target, true).await
+}
+
+#[tauri::command]
+pub async fn get_history(
+    state: State<'_, AppState>,
+    id: String,
+    since: i64,
+) -> Result<Vec<history::Sample>> {
+    let dir = state.history_dir();
+    tauri::async_runtime::spawn_blocking(move || history::read(&dir, &id, since)).await?
 }
 
 #[tauri::command]

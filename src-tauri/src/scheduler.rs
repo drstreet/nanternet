@@ -8,11 +8,12 @@ use crate::error::Result;
 use crate::notification_engine::{self, Alert};
 use crate::state::AppState;
 use crate::status::{Finding, TargetStatus, WebsiteReport};
-use crate::{cert_watch, dns_probe, network_checker, secrets, ssh_manager};
+use crate::{cert_watch, dns_probe, history, network_checker, secrets, ssh_manager};
 
 pub const STATUS_EVENT: &str = "target://status";
 
 const TICK: Duration = Duration::from_secs(1);
+const PRUNE_EVERY: Duration = Duration::from_secs(86_400);
 
 struct Slot {
     next: Instant,
@@ -22,10 +23,23 @@ struct Slot {
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut slots: HashMap<String, Slot> = HashMap::new();
+        let mut next_prune = Instant::now();
         loop {
             let state = app.state::<AppState>();
             let targets = state.targets().await;
             let ids: Vec<String> = targets.iter().map(|target| target.id.clone()).collect();
+
+            if Instant::now() >= next_prune {
+                next_prune = Instant::now() + PRUNE_EVERY;
+                let dir = state.history_dir();
+                let known = ids.clone();
+                let cutoff = crate::unix_now() - history::RETENTION_SECS;
+                tauri::async_runtime::spawn_blocking(move || {
+                    if let Err(err) = history::prune(&dir, &known, cutoff) {
+                        eprintln!("could not prune history: {err}");
+                    }
+                });
+            }
 
             slots.retain(|id, _| ids.contains(id));
             state.retain_known(&ids).await;
@@ -70,6 +84,13 @@ pub async fn visit(app: AppHandle, target: Target, slow: bool) -> Result<TargetS
     let state = app.state::<AppState>();
 
     state.record(status.clone()).await;
+    let dir = state.history_dir();
+    let sample = history::Sample::from(&status);
+    let id = target.id.clone();
+    let stored = tauri::async_runtime::spawn_blocking(move || history::append(&dir, &id, &sample));
+    if let Ok(Err(err)) = stored.await {
+        eprintln!("could not record history: {err}");
+    }
     let _ = app.emit(STATUS_EVENT, &status);
 
     let settings = state.settings().await;

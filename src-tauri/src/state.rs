@@ -58,6 +58,10 @@ impl AppState {
         })
     }
 
+    pub fn history_dir(&self) -> PathBuf {
+        self.path.with_file_name("history")
+    }
+
     pub async fn targets(&self) -> Vec<Target> {
         self.store.lock().await.targets.clone()
     }
