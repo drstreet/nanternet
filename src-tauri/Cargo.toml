@@ -1,6 +1,6 @@
 [package]
 name = "irannanternet"
-version = "0.2.0"
+version = "0.2.1"
 description = "Regional-aware uptime and server health monitoring"
 authors = ["IranNANternet contributors"]
 license = "MIT"
